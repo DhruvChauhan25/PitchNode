@@ -24,6 +24,21 @@ const setupSockets = (io) => {
             );
         });
 
+        socket.on("leave-session", (roomId) => {
+
+            if (!rooms[roomId]) {
+                return;
+            }
+
+            rooms[roomId] = rooms[roomId].filter((id) => id !== socket.id);
+            socket.leave(roomId);
+
+            io.to(roomId).emit(
+                "participant-count",
+                rooms[roomId].length
+            );
+        });
+
         socket.on("disconnect", () => {
             console.log('A user disconnected:', socket.id);
             // Remove the user from all rooms they were in

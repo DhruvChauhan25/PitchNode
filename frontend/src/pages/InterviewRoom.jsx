@@ -1,12 +1,18 @@
 import {useEffect, useState} from "react";
 import {io} from "socket.io-client";
+import axios from "axios";
+
+import {createRoomApi, checkRoomApi} from "../api/sessionApi";
 
 const socket = io("http://localhost:5001");
 
 function InterviewRoom() {
+    const [createdRoomId, setCreatedRoomId] = useState("");
     const [roomId, setRoomId] = useState("");
     const [messages, setMessages] = useState([]);
     const [participantCount, setParticipantCount] = useState(0);
+    const [joined, setJoined] = useState(false);
+    const [error, setError] = useState("");
 
     useEffect(() => {
         socket.on("message", (msg) => {
@@ -23,9 +29,42 @@ function InterviewRoom() {
         };
     }, []);
 
-    const joinRoom = () => {
-        if (roomId) {
-            socket.emit("join-session", roomId);
+    const createRoom = async () => {
+        try {
+            const response = await createRoomApi();
+            setCreatedRoomId(response.data.roomId);
+            setRoomId(response.data.roomId);
+        } catch (err) {
+            console.error("Error creating room:", err);
+        }
+    };
+
+    const joinRoom = async () => {
+        if(!roomId) {
+            setError("Please enter a valid Room ID");
+            return;
+        }
+
+        try{
+            const response = await checkRoomApi(roomId);
+
+                if(!response.data.exists) {
+                    setError("Room does not exist. Please check the Room ID.");
+                    return;
+                }
+                socket.emit("join-session", roomId);
+                setError("");
+                setJoined(true);
+        } catch (err) {
+            console.error("Error joining room:", err);
+        }
+    };
+
+    const leaveRoom = () => {
+        if(roomId) {
+            socket.emit("leave-session", roomId);
+            setParticipantCount(0);
+            setJoined(false);
         }
     };
 
@@ -40,12 +79,47 @@ function InterviewRoom() {
                 value={roomId}
                 onChange={(e) => setRoomId(e.target.value)}
             />
-            <button 
-                className="btn btn-primary mb-3" 
-                onClick={joinRoom}
-            >
-                Join Room
+{
+            <button
+                className="btn btn-success mb-3 me-2"
+                onClick={createRoom}
+                >
+                Create Room
             </button>
+}
+            {!joined ? (
+                <button
+                    className="btn btn-primary mb-3 me-2"
+                    onClick={joinRoom}
+                >
+                    Join Room
+                </button>
+                ) : (
+                <button
+                    className="btn btn-danger mb-3 me-2"
+                    onClick={leaveRoom}
+                >
+                    Leave Room
+                </button>
+            )}
+
+            {createdRoomId && (
+                <div className="alert alert-success">
+                    Room Created: {createdRoomId}
+                </div>
+            )}
+
+            {roomId && !createdRoomId && (
+                <div className="alert alert-info">
+                    Attempting to join Room: {roomId}
+                </div>
+            )}
+
+            {error && (
+                <div className="alert alert-danger">
+                    {error}
+                </div>
+            )}
 
             <div className="card mt-3">
                 <div className="card-body text-center">
@@ -56,9 +130,6 @@ function InterviewRoom() {
             </div>
 
             <hr/>
-
-            <h4>Messages:</h4>
-
 
             {messages.map((msg, index) => (
                 <div key={index} className="card mb-2">
