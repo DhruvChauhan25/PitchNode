@@ -1,3 +1,5 @@
+require("dotenv").config({quiet: true});
+
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
@@ -12,7 +14,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: '*',
+    origin: process.env.CLIENT_URL || 'http://localhost:5173',
     methods: ['GET', 'POST'],
   },
 });
