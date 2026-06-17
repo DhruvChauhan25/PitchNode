@@ -16,7 +16,7 @@ def get_supabase() -> Client:
     if _client is None:
         if not SUPABASE_URL or not SUPABASE_KEY:
             raise RuntimeError(
-                "SUPABASE_URL / SUPABASE_KEY not set. Copy .env.example to .env and fill in your project credentials."
+                "SUPABASE_URL / SUPABASE_KEY not set."
             )
         _client = create_client(SUPABASE_URL, SUPABASE_KEY)
     return _client
