@@ -12,8 +12,7 @@ def get_rubric(interview_type: Literal["technical", "hr", "behavioral"]):
     Returns the locked rubric dimensions for a given interview type,
     in display order. This is the methodology scoring prompts will be
     built not used for scoring yet, just exposed here
-    so the structure can be verified/reused (e.g. by the frontend to
-    show "what to be scored on").
+    so the structure can be reused.
     """
     supabase = get_supabase()
 
