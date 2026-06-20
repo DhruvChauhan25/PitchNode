@@ -6,6 +6,30 @@ const setupSockets = (io) => {
 
         console.log("A user connected:", socket.id);
 
+        socket.on("offer", ({ roomId, offer }) => {
+            console.log(`Received offer for room ${roomId} from ${socket.id}`);
+            socket.to(roomId).emit("offer", { 
+                offer,
+                senderId: socket.id
+             });
+        });
+
+        socket.on("answer", ({ roomId, answer }) => {
+            console.log(`Received answer for room ${roomId} from ${socket.id}`);
+            socket.to(roomId).emit("answer", { 
+                answer,
+                senderId: socket.id
+             });
+        });
+
+        socket.on("ice-candidate", ({ roomId, candidate }) => {
+            console.log(`Received ICE candidate for room ${roomId} from ${socket.id}`);
+            socket.to(roomId).emit("ice-candidate", { 
+                candidate,
+                senderId: socket.id
+             });
+        });
+
         socket.on("join-session", (roomId) => {
 
             if (!rooms[roomId]) {
