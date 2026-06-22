@@ -1,25 +1,13 @@
 import { useEffect, useRef } from "react";
 
-function VideoPanel() {
+function VideoPanel({ stream }) {
   const videoRef = useRef(null);
 
   useEffect(() => {
-    const startCamera = async () => {
-      try {
-        const stream =
-          await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: true,
-          });
-
-        videoRef.current.srcObject = stream;
-      } catch (err) {
-        console.log(err);
-      }
-    };
-
-    startCamera();
-  }, []);
+   if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+    } 
+  }, [stream]);
 
   return (
     <video
