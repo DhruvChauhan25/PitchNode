@@ -1,48 +1,36 @@
-export const registerSignalingEvents = (
-  socket, 
-  peerConnectionRef, 
-  getRoomId
-) => {
-  
-  socket.off("offer");
-  socket.off("answer");
-  socket.off("ice-candidate");
+export const registerSignalingEvents = (socket, peerConnectionRef, getRoomId) => {
+    socket.off("offer");
+    socket.off("answer");
+    socket.off("ice-candidate");
 
-  socket.on("offer", async ({ offer }) => {
-    const pc = peerConnectionRef.current;
+    socket.on("offer", async ({ offer }) => {
+        const pc = peerConnectionRef.current;
+        if (!pc) return;
 
-    if(!pc) return;
+        await pc.setRemoteDescription(offer);
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
 
-    await pc.setRemoteDescription(offer);
+        socket.emit("answer", { roomId: getRoomId(), answer });
+    });
 
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
+    socket.on("answer", async ({ answer }) => {
+        const pc = peerConnectionRef.current;
+        if (!pc) return;
 
-      socket.emit("answer", {
-          roomId: getRoomId(),
-          answer,
-      });
+        await pc.setRemoteDescription(answer);
+    });
 
-      console.log("Participant created answer");
-  });
+    socket.on("ice-candidate", async ({ candidate }) => {
+        const pc = peerConnectionRef.current;
+        if (!pc) return;
 
-  socket.on("answer", async ({ answer }) => {
-    const pc = peerConnectionRef.current;
+        await pc.addIceCandidate(candidate);
+    });
 
-    if(!pc) return;
-
-    await pc.setRemoteDescription(answer);
-
-    console.log("Host received answer: ", answer);
-  });
-
-  socket.on("ice-candidate", async ({ candidate }) => {
-    const pc = peerConnectionRef.current;
-
-    if(!pc) return;
-
-    await pc.addIceCandidate(candidate);
-
-    console.log("ICE candidate received: ", candidate);
-  });
+    return () => {
+        socket.off("offer");
+        socket.off("answer");
+        socket.off("ice-candidate");
+    };
 };

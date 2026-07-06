@@ -1,24 +1,19 @@
-let peerConnection = null;
-
 export const createPeerConnection = () => {
-    peerConnection = new RTCPeerConnection({
+    return new RTCPeerConnection({
         iceServers: [
-            { 
-                urls: 'stun:stun.l.google.com:19302' 
-            },
-        ]
+            { urls: 'stun:stun.l.google.com:19302' },
+        ],
     });
-    peerConnection.createDataChannel("TEST");
-    return peerConnection;
-}
+};
 
-export const getPeerConnection = () => {
-    return peerConnection;
-}
+export const addLocalStream = (pc, stream) => {
+    if (!pc || !stream) return;
+    stream.getTracks().forEach(track => pc.addTrack(track, stream));
+};
 
-export const closePeerConnection = () => {
-    if (peerConnection) {
-        peerConnection.close();
-        peerConnection = null;
-    }
-}
+export const registerRemoteTrack = (pc, callback) => {
+    if (!pc) return;
+    pc.ontrack = (event) => {
+        callback(event.streams[0]);
+    };
+};
