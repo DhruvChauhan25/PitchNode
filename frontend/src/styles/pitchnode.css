@@ -1,0 +1,329 @@
+:root {
+  /* Surfaces */
+  --ink-0: #08060e;
+  --ink-1: #0e0b18;
+  --ink-2: #171126;
+  --glass: rgba(255, 255, 255, 0.045);
+  --glass-strong: rgba(255, 255, 255, 0.08);
+  --stroke: rgba(255, 255, 255, 0.09);
+  --stroke-strong: rgba(255, 255, 255, 0.16);
+
+  /* Text */
+  --text: #a9a3b8;
+  --text-h: #f6f4fa;
+  --text-dim: #6d6680;
+
+  /* Brand */
+  --accent: #aa3bff;
+  --accent-hi: #c678ff;
+  --accent-soft: rgba(170, 59, 255, 0.14);
+  --accent-border: rgba(170, 59, 255, 0.45);
+
+  /* Signals */
+  --good: #3ddc97;
+  --warn: #ffb648;
+  --bad: #ff5d73;
+
+  /* Type */
+  --display: "Sora", system-ui, sans-serif;
+  --body: "Inter", system-ui, sans-serif;
+
+  /* Rhythm */
+  --radius: 14px;
+  --radius-lg: 22px;
+  --shadow: 0 18px 50px -18px rgba(0, 0, 0, 0.7);
+
+  color-scheme: dark;
+}
+
+/* ---- Reset ---- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100svh;
+  font: 16px/1.6 var(--body);
+  color: var(--text);
+  background:
+    radial-gradient(900px 500px at 80% -10%, rgba(170, 59, 255, 0.13), transparent 60%),
+    radial-gradient(700px 500px at 8% 110%, rgba(170, 59, 255, 0.08), transparent 60%),
+    var(--ink-0);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--display);
+  color: var(--text-h);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--accent-hi);
+  text-decoration: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+   /* Shared primitives */
+
+.pn-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 13px 26px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font: 600 15px/1 var(--body);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.pn-btn:active {
+  transform: translateY(1px);
+}
+
+.pn-btn--primary {
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent), #8324d6);
+  box-shadow: 0 8px 26px -8px rgba(170, 59, 255, 0.65);
+}
+
+.pn-btn--primary:hover {
+  box-shadow: 0 10px 32px -8px rgba(170, 59, 255, 0.85);
+}
+
+.pn-btn--ghost {
+  color: var(--text-h);
+  background: var(--glass);
+  border-color: var(--stroke-strong);
+}
+
+.pn-btn--ghost:hover {
+  background: var(--glass-strong);
+  border-color: var(--accent-border);
+}
+
+.pn-card {
+  background: var(--glass);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: var(--shadow);
+}
+
+.pn-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--stroke);
+  background: var(--glass);
+  font: 500 12.5px/1 var(--body);
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+
+.pn-input {
+  width: 100%;
+  padding: 13px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--stroke-strong);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text-h);
+  font: 500 15px/1.4 var(--body);
+  transition: border-color 0.15s ease;
+}
+
+.pn-input::placeholder {
+  color: var(--text-dim);
+}
+
+.pn-input:focus {
+  outline: none;
+  border-color: var(--accent-border);
+}
+
+/* Pulse node — brand signature, reused as live/REC indicator */
+.pn-node {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+
+.pn-node::before,
+.pn-node::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+.pn-node::before {
+  background: var(--accent);
+  box-shadow: 0 0 12px rgba(170, 59, 255, 0.9);
+}
+
+.pn-node::after {
+  border: 1.5px solid var(--accent);
+  animation: pn-pulse 2.2s ease-out infinite;
+}
+
+.pn-node--live::before {
+  background: var(--bad);
+  box-shadow: 0 0 12px rgba(255, 93, 115, 0.9);
+}
+
+.pn-node--live::after {
+  border-color: var(--bad);
+}
+
+@keyframes pn-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+   /* App shell */
+
+.pn-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px clamp(20px, 5vw, 56px);
+}
+
+.pn-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  font: 700 19px/1 var(--display);
+  color: var(--text-h);
+  letter-spacing: -0.01em;
+}
+
+.pn-brand .pn-node {
+  width: 13px;
+  height: 13px;
+}
+
+   /* Landing */
+
+.landing-hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: clamp(32px, 7vh, 80px) 24px;
+  gap: 22px;
+}
+
+.landing-hero__eyebrow {
+  color: var(--accent-hi);
+  font: 600 12.5px/1 var(--body);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.landing-hero h1 {
+  font-size: clamp(38px, 6.2vw, 68px);
+  font-weight: 700;
+  line-height: 1.06;
+  max-width: 13ch;
+}
+
+.landing-hero h1 em {
+  font-style: normal;
+  background: linear-gradient(120deg, var(--accent-hi), var(--accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.landing-hero__sub {
+  max-width: 52ch;
+  font-size: 17px;
+  color: var(--text);
+}
+
+.landing-hero__cta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.landing-hero__hint {
+  font-size: 13.5px;
+  color: var(--text-dim);
+}
+
+/* Pipeline strip — how a session flows, quiet and factual */
+.landing-flow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 26px clamp(20px, 5vw, 56px) 40px;
+}
+
+.landing-flow__step {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-dim);
+  font: 500 13px/1 var(--body);
+}
+
+.landing-flow__step strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.landing-flow__arrow {
+  color: var(--text-dim);
+  opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pn-node::after {
+    animation: none;
+    opacity: 0;
+  }
+
+  .pn-btn {
+    transition: none;
+  }
+}
