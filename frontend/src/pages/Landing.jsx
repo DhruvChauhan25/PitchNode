@@ -10,27 +10,28 @@ const FLOW = [
   "Review your dashboard",
 ];
 
-function landing() {
-    const navigate = useNavigate();
+function Landing() {
+  const navigate = useNavigate();
 
-    useEffect(() => {
-        document.title = "PitchNode - AI Mock Interview Platform";
-    }, []);
+  useEffect(() => {
+    document.title = "PitchNode — AI Mock Interviews";
+  }, []);
 
-    return (<>
-        <nav className="pn-nav">
-            <Logo />
-            <span className="pn-pill">
-            <span className="pn-node" aria-hidden="true" />
-                Live peer sessions
-            </span>
-        </nav>
+  return (
+    <>
+      <nav className="pn-nav">
+        <Logo />
+        <span className="pn-pill">
+          <span className="pn-node" aria-hidden="true" />
+          Live peer sessions
+        </span>
+      </nav>
 
-        <main className="landing-hero">
+      <main className="landing-hero">
         <span className="landing-hero__eyebrow">AI-powered mock interviews</span>
 
         <h1>
-          Ace every Interview. <em>Anywhere. Instantly.</em>
+          Ace every interview. <em>Anywhere. Instantly.</em>
         </h1>
 
         <p className="landing-hero__sub">
@@ -42,7 +43,7 @@ function landing() {
         <div className="landing-hero__cta">
           <button
             className="pn-btn pn-btn--primary"
-            onClick={() => navigate("/room")}
+            onClick={() => navigate("/setup")}
           >
             Start mock interview
           </button>
@@ -55,7 +56,7 @@ function landing() {
         </div>
 
         <p className="landing-hero__hint">
-          No installs. Runs in your browser.
+          No installs. Runs in your browser over WebRTC.
         </p>
       </main>
 
@@ -71,8 +72,8 @@ function landing() {
           </span>
         ))}
       </footer>
-
-    </>);
+    </>
+  );
 }
 
-export default landing;
+export default Landing;
