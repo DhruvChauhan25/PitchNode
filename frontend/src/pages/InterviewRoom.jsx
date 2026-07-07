@@ -20,6 +20,7 @@ import {
   CheckIcon,
 } from "../components/RoomIcons";
 import { getQuestions } from "../data/questionBank";
+import AiInterviewRoom from "./AiInterviewRoom";
 import useLocalMedia from "../hooks/useLocalMedia";
 import usePeerConnection from "../hooks/usePeerConnection";
 import "../styles/room.css";
@@ -30,13 +31,14 @@ function formatElapsed(totalSeconds) {
   return `${m}:${s}`;
 }
 
-const DEFAULT_SETTINGS = { type: "Technical", difficulty: "Medium", duration: 30 };
+const DEFAULT_SETTINGS = {
+  mode: "human",
+  type: "Technical",
+  difficulty: "Medium",
+  duration: 30,
+};
 
-function InterviewRoom() {
-  const location = useLocation();
-  const settings = location.state?.settings ?? DEFAULT_SETTINGS;
-  const questions = getQuestions(settings.type, settings.difficulty);
-
+function LiveInterviewRoom({ settings, questions }) {
   const [createdRoomId, setCreatedRoomId] = useState("");
   const [roomId, setRoomId] = useState(
     () => new URLSearchParams(window.location.search).get("roomId") || ""
@@ -381,6 +383,7 @@ function InterviewRoom() {
             <SessionInfo
               participantCount={participantCount}
               roomId={roomId}
+              mode={settings.mode}
               type={settings.type}
               duration={`${settings.duration} min`}
               connected={connected}
@@ -390,6 +393,21 @@ function InterviewRoom() {
       )}
     </div>
   );
+}
+
+/*
+ * Mode fork: AI sessions are solo — no lobby, no socket, no WebRTC.
+ * Live sessions (human/friend) use the peer room below, unchanged.
+ */
+function InterviewRoom() {
+  const location = useLocation();
+  const settings = location.state?.settings ?? DEFAULT_SETTINGS;
+  const questions = getQuestions(settings.type, settings.difficulty);
+
+  if (settings.mode === "ai") {
+    return <AiInterviewRoom settings={settings} questions={questions} />;
+  }
+  return <LiveInterviewRoom settings={settings} questions={questions} />;
 }
 
 export default InterviewRoom;

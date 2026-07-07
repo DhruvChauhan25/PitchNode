@@ -4,6 +4,7 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import Landing from "./pages/Landing";
 import InterviewRoom from "./pages/InterviewRoom";
 import InterviewSetup from "./pages/interviewSetup";
+import Results from "./pages/Results";
 
 function App() {
   return (
@@ -12,6 +13,7 @@ function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/room" element={<InterviewRoom />} />
         <Route path="/setup" element={<InterviewSetup />} />
+        <Route path="/results" element={<Results />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

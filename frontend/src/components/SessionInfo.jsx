@@ -1,11 +1,15 @@
+const MODE_LABELS = { ai: "AI Interviewer", human: "With a Human", friend: "With a Friend" };
+
 function SessionInfo({
   participantCount = 0,
   roomId = "",
+  mode = "human",
   type = "Technical",
   duration = "30 min",
   connected = false,
 }) {
   const rows = [
+    { key: "Mode", val: MODE_LABELS[mode] ?? mode },
     { key: "Participants", val: participantCount },
     { key: "Room ID", val: roomId || "—" },
     { key: "Interview type", val: type },

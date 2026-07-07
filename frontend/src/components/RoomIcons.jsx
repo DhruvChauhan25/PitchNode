@@ -55,6 +55,20 @@ export const LeaveIcon = () => (
   </svg>
 );
 
+export const SpeakerIcon = () => (
+  <svg {...base}>
+    <path d="M11 5 6.5 8.5H3v7h3.5L11 19V5z" />
+    <path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 6a9 9 0 0 1 0 12" />
+  </svg>
+);
+
+export const SpeakerOffIcon = () => (
+  <svg {...base}>
+    <path d="M11 5 6.5 8.5H3v7h3.5L11 19V5z" />
+    <path d="M16 9.5l5 5M21 9.5l-5 5" />
+  </svg>
+);
+
 export const CopyIcon = () => (
   <svg {...base} width={16} height={16}>
     <rect x="9" y="9" width="12" height="12" rx="2" />

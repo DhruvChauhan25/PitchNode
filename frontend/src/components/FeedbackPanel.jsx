@@ -5,7 +5,7 @@ const METRICS = [
   { key: "problemSolving", label: "Problem solving" },
 ];
 
-function FeedbackPanel({ scores = null }) {
+function FeedbackPanel({ scores = null, feedback = "" }) {
   return (
     <div className="rm-card rm-anim rm-anim--3">
       <div className="rm-card__head">
@@ -30,10 +30,14 @@ function FeedbackPanel({ scores = null }) {
         );
       })}
 
-      {!scores && (
-        <p className="rm-card__note">
-          Scores appear here after each answer is evaluated.
-        </p>
+      {feedback ? (
+        <p className="rm-card__note">{feedback}</p>
+      ) : (
+        !scores && (
+          <p className="rm-card__note">
+            Scores appear here after each answer is evaluated.
+          </p>
+        )
       )}
     </div>
   );
