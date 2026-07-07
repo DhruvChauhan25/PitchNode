@@ -1,3 +1,4 @@
+
 .room-page {
   --rm-bg: #fbfaff;
   --rm-surface: #ffffff;
@@ -414,6 +415,11 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.rm-transcript__interim {
+  color: var(--rm-text-dim);
+  font-style: italic;
 }
 
 .rm-transcript__waiting {

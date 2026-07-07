@@ -25,8 +25,11 @@ const IMPROVEMENT = {
     "Walk through your reasoning step by step before jumping to the solution.",
 };
 
-export function mockEvaluate({ questionIndex, answerSeconds }) {
-  const seed = (questionIndex + 1) * 31 + Math.min(answerSeconds, 180) * 7;
+export function mockEvaluate({ questionIndex, answerSeconds, transcriptLength }) {
+  const seed = 
+  (questionIndex + 1) * 31 + 
+    Math.min(answerSeconds, 180) * 7 + 
+    Math.min(transcriptLength, 1200);
   const score = (k) =>
     68 + Math.floor(Math.abs(Math.sin(seed + k * 3.7)) * 28);
 

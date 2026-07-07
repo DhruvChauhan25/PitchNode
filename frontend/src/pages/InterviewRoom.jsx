@@ -22,6 +22,7 @@ import {
 import { getQuestions } from "../data/questionBank";
 import AiInterviewRoom from "./AiInterviewRoom";
 import useLocalMedia from "../hooks/useLocalMedia";
+import useSpeechRecognition from "../hooks/useSpeechRecognition";
 import usePeerConnection from "../hooks/usePeerConnection";
 import "../styles/room.css";
 
@@ -57,6 +58,8 @@ function LiveInterviewRoom({ settings, questions }) {
   const [copied, setCopied] = useState(false);
 
   const screenTrackRef = useRef(null);
+
+  const { supported, lines, interim } = useSpeechRecognition({ enabled: joined && micOn,});
 
   const socketRef = useRef(null);
   if (!socketRef.current) {
@@ -378,7 +381,11 @@ function LiveInterviewRoom({ settings, questions }) {
               type={settings.type}
               question={questions[0]}
             />
-            <TranscriptPanel />
+            <TranscriptPanel
+              lines={lines}
+              interim={interim}
+              supported={supported}
+            />
             <FeedbackPanel />
             <SessionInfo
               participantCount={participantCount}

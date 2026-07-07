@@ -17,6 +17,7 @@ import {
 } from "../components/RoomIcons";
 import { mockEvaluate } from "../utils/mockEvaluation";
 import useLocalMedia from "../hooks/useLocalMedia";
+import useSpeechRecognition from "../hooks/useSpeechRecognition";
 import "../styles/room.css";
 
 function formatElapsed(totalSeconds) {
@@ -42,11 +43,14 @@ function AiInterviewRoom({ settings, questions }) {
   const questionStartRef = useRef(null);
   const sessionRequestedRef = useRef(false);
 
+  const { supported, lines, interim, transcript, reset } = useSpeechRecognition({ enabled: micOn });
+
   /*
    * Create a session record so results have an ID to attach to.
    * AI mode has no peer, so this is bookkeeping only — if the backend
    * is unreachable we continue in offline demo mode instead of blocking.
    */
+
   useEffect(() => {
     if (sessionRequestedRef.current) return;
     sessionRequestedRef.current = true;
@@ -94,18 +98,23 @@ function AiInterviewRoom({ settings, questions }) {
     const startedAt = questionStartRef.current ?? Date.now();
     const answerSeconds = Math.round((Date.now() - startedAt) / 1000);
     /* Swap for: POST /evaluations { sessionId, questionId, transcript } */
-    const result = mockEvaluate({ questionIndex: qIndex, answerSeconds });
+    const result = mockEvaluate({ 
+        questionIndex: qIndex, 
+        answerSeconds,
+        transcriptLength: transcript.length,
+    });
     setScores(result.scores);
     setFeedback(result.feedback);
     setAnswers((prev) => [
       ...prev.filter((a) => a.index !== qIndex),
-      { index: qIndex, question: questions[qIndex], ...result },
+      { index: qIndex, question: questions[qIndex], transcript, ...result },
     ]);
   };
 
   const nextQuestion = () => {
     setScores(null);
     setFeedback("");
+    reset();
     setQIndex((i) => Math.min(i + 1, questions.length - 1));
   };
 
@@ -216,7 +225,7 @@ function AiInterviewRoom({ settings, questions }) {
             type={settings.type}
             question={questions[qIndex]}
           />
-          <TranscriptPanel />
+          <TranscriptPanel lines={lines} interim={interim} supported={supported} />
           <FeedbackPanel scores={scores} feedback={feedback} />
           <SessionInfo
             participantCount={1}
