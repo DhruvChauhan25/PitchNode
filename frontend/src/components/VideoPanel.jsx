@@ -1,24 +1,21 @@
 import { useEffect, useRef } from "react";
 
-function VideoPanel({ stream, muted = true }) {
+function VideoPanel({ stream, muted = true, mirrored = false }) {
   const videoRef = useRef(null);
 
   useEffect(() => {
-   console.log("VideoPanel stream:", stream);
-  
-   if (videoRef.current && stream) {
-      console.log("Assigning srcObject to video element");
+    if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
-    } 
+    }
   }, [stream]);
 
   return (
     <video
       ref={videoRef}
       autoPlay
-      muted = {muted}
+      muted={muted}
       playsInline
-      width="100%"
+      className={`rm-video__el${mirrored ? " rm-video__el--mirror" : ""}`}
     />
   );
 }
