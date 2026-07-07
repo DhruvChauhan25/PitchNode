@@ -10,9 +10,7 @@ QUESTIONS_PER_SESSION = 5
 @router.post("/{session_id}/start", response_model=dict)
 def start_session_questions(session_id: str):
     """
-    Called once when the interview begins. Fetches all questions for
-    this session's interview_type and queues them in session_questions,
-    so the backend owns the order and progress tracking.
+    Called once when the interview begins. 
     """
     supabase = get_supabase()
 
@@ -58,7 +56,7 @@ def start_session_questions(session_id: str):
 @router.get("/{session_id}/next", response_model=QuestionResponse)
 def get_next_question(session_id: str):
     """
-    Returns the next unanswered question for this session.
+    Returns the next unanswered question for the session.
     Returns 404 with a clear message if all questions are already answered.
     """
     supabase = get_supabase()
@@ -107,8 +105,8 @@ def get_next_question(session_id: str):
 @router.post("/{session_id}/answered/{question_id}", response_model=dict)
 def mark_answered(session_id: str, question_id: str):
     """
-    Marks a question as answered so the next call to /next advances forward.
-    Call this after the candidate finishes speaking (before or after transcription).
+    Marks a question as answered so the next call to forward.
+    Call this after the candidate finishes speaking.
     """
     supabase = get_supabase()
 
