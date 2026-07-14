@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from app.models.question import QuestionResponse, SessionCompleteResponse
+from app.models.question import QuestionResponse
 from app.db.supabase_client import get_supabase
 
 router = APIRouter(prefix="/questions", tags=["questions"])
