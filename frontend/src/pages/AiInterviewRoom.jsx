@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { createRoomApi } from "../api/sessionApi";
+import {
+  startSessionApi,
+  startQuestionsApi,
+  nextQuestionApi,
+  markAnsweredApi,
+  evaluateAnswerApi,
+  getUserId,
+  completeSessionApi,
+} from "../api/interviewApi";
+
 import VideoPanel from "../components/VideoPanel";
 import QuestionPanel from "../components/QuestionPanel";
 import TranscriptPanel from "../components/TranscriptPanel";
@@ -30,7 +39,10 @@ function AiInterviewRoom({ settings, questions }) {
   const navigate = useNavigate();
   const localStream = useLocalMedia();
 
-  const [roomId, setRoomId] = useState("");
+  const [sessionId, setSessionId] = useState("");
+  const [apiQuestion, setApiQuestion] = useState(null);
+  const [allAnswered, setAllAnswered] = useState(false);
+
   const [qIndex, setQIndex] = useState(0);
   const [scores, setScores] = useState(null);
   const [feedback, setFeedback] = useState("");
@@ -39,11 +51,33 @@ function AiInterviewRoom({ settings, questions }) {
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
   const [ttsOn, setTtsOn] = useState(true);
+  const [scoring, setScoring] = useState(false);
 
   const questionStartRef = useRef(null);
   const sessionRequestedRef = useRef(false);
 
-  const { supported, lines, interim, transcript, reset } = useSpeechRecognition({ enabled: micOn });
+  const speech = useSpeechRecognition({ enabled: micOn });
+
+  const { supported, lines, interim, transcript } = speech;
+  const resetTranscript = () => 
+    typeof speech.reset === "function" ? speech.reset() : undefined;
+
+  const apiMode = sessionId !== "" && sessionId !== "OFFLINE";
+
+  /* Server-driven values when the backend is up; local bank otherwise */
+  const currentQuestion =
+    apiMode && apiQuestion ? apiQuestion.prompt : questions[qIndex];
+
+  const questionNumber =
+    apiMode && apiQuestion ? apiQuestion.question_number : qIndex + 1;
+
+  const totalQuestions =
+    apiMode && apiQuestion ? apiQuestion.total_questions : questions.length;
+
+  const isLast =
+    apiMode && apiQuestion
+      ? apiQuestion.is_last
+      : qIndex === questions.length - 1;
 
   /*
    * Create a session record so results have an ID to attach to.
@@ -54,10 +88,30 @@ function AiInterviewRoom({ settings, questions }) {
   useEffect(() => {
     if (sessionRequestedRef.current) return;
     sessionRequestedRef.current = true;
-    createRoomApi()
-      .then((res) => setRoomId(res?.data?.roomId ?? "OFFLINE"))
-      .catch(() => setRoomId("OFFLINE"));
-  }, []);
+    
+    (async () => {
+      try {
+        const res = await startSessionApi(settings.type);
+        const id = res?.data?.id;
+
+        if(!id) {
+          throw new Error("Session response missing id");
+        }
+
+        await startQuestionsApi(id);
+
+        const q = await nextQuestionApi(id);
+        setApiQuestion(q?.data);
+        setSessionId(id);
+      } catch (err) {
+        console.warn(
+          "Evaluation service unavailable — using local question bank.",
+          err
+        );
+        setSessionId("OFFLINE");
+      }
+    })();
+  }, [settings.type]);
 
   /* Session timer */
   useEffect(() => {
@@ -67,18 +121,25 @@ function AiInterviewRoom({ settings, questions }) {
 
   /* Speak the question aloud when it changes (browser TTS, toggleable) */
   useEffect(() => {
-    if (!ttsOn || !window.speechSynthesis) return;
-    const utterance = new SpeechSynthesisUtterance(questions[qIndex]);
+    const synth = window.speechSynthesis;
+    if (!ttsOn || !synth || !currentQuestion) 
+      return;
+
+    const utterance = new SpeechSynthesisUtterance(currentQuestion);
     utterance.rate = 1;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
-    return () => window.speechSynthesis.cancel();
-  }, [qIndex, ttsOn, questions]);
+    utterance.lang = "en-US";
+
+    const t = setTimeout(() => synth.speak(utterance), 120);
+    return () => {
+      clearTimeout(t);
+      synth.cancel();
+    };
+  }, [ttsOn, currentQuestion]);
 
   /* Track when the current question started, for answer timing */
   useEffect(() => {
     questionStartRef.current = Date.now();
-  }, [qIndex]);
+  }, [currentQuestion]);
 
   const toggleMic = () => {
     if (!localStream) return;
@@ -94,51 +155,111 @@ function AiInterviewRoom({ settings, questions }) {
     setCamOn(next);
   };
 
-  const submitAnswer = () => {
+  const submitAnswer = async () => {
     const startedAt = questionStartRef.current ?? Date.now();
     const answerSeconds = Math.round((Date.now() - startedAt) / 1000);
-    /* Swap for: POST /evaluations { sessionId, questionId, transcript } */
-    const result = mockEvaluate({ 
-        questionIndex: qIndex, 
-        answerSeconds,
-        transcriptLength: transcript.length,
-    });
-    setScores(result.scores);
-    setFeedback(result.feedback);
+    const index = questionNumber - 1;
+    const questionId = apiMode && apiQuestion ? apiQuestion.id : null;
+
+    setScoring(true);
+    let result;
+
+    try{
+      if(apiMode && questionId) {
+        const res = await evaluateAnswerApi({
+          sessionId,
+          questionId,
+          questionText: currentQuestion,
+          transcript,
+        });
+        result = res?.data;
+      } else {
+        throw new Error("Offline mode or missing question ID — using mock evaluation");
+      } 
+    } catch(err) {
+        console.warn("Live scoring unavailable — using local estimate.", err);
+        result = mockEvaluate({ 
+          questionIndex: index, 
+          answerSeconds,
+          transcriptLength: transcript.length,
+        });
+    } finally {
+      setScoring(false);  
+    }
+
+    setScores(result?.scores);
+    setFeedback(result?.feedback);
     setAnswers((prev) => [
-      ...prev.filter((a) => a.index !== qIndex),
-      { index: qIndex, question: questions[qIndex], transcript, ...result },
+      ...prev.filter((a) => a.index !== index),
+      { 
+        index, 
+        question: currentQuestion, 
+        questionId,
+        transcript, 
+        ...result 
+      },
     ]);
   };
 
-  const nextQuestion = () => {
+  const nextQuestion = async () => {
     setScores(null);
     setFeedback("");
-    reset();
+    resetTranscript();
+
+    if (apiMode && apiQuestion) {
+      try {
+        await markAnsweredApi(sessionId, apiQuestion.id);
+        const q = await nextQuestionApi(sessionId);
+        setApiQuestion(q.data);
+      } catch (err) {
+        if (err?.response?.status === 404) {
+          setAllAnswered(true);
+        } else {
+          console.error("Failed to fetch next question:", err);
+        }
+      }
+      return;
+    }
+
     setQIndex((i) => Math.min(i + 1, questions.length - 1));
   };
 
   const finishInterview = () => {
     window.speechSynthesis?.cancel();
+
+    if (apiMode && apiQuestion) {
+      markAnsweredApi(sessionId, apiQuestion.id).catch(() => {});
+    }
+
+    if (apiMode) {
+      completeSessionApi(sessionId).catch(() => {}); // best-effort
+    }
+
     navigate("/results", {
       state: {
         settings,
         answers: [...answers].sort((a, b) => a.index - b.index),
         totalSeconds: elapsed,
-        roomId,
+        sessionId,
+        userId: getUserId(),
       },
     });
   };
 
-  const isLast = qIndex === questions.length - 1;
   const answeredCurrent = scores != null;
+  const badgeId =
+    sessionId === "OFFLINE"
+      ? "OFFLINE"
+      : sessionId
+      ? sessionId.slice(0, 8).toUpperCase()
+      : "";
 
   return (
     <div className="room-page">
       <header className="room-header">
         <div className="room-header__group">
           <h1>AI Interview</h1>
-          {roomId && <span className="rm-badge rm-badge--id">{roomId}</span>}
+          {badgeId && <span className="rm-badge rm-badge--id">{badgeId}</span>}
           <span className="rm-badge rm-badge--live">
             <span className="rm-dot rm-dot--pulse" />
             Solo session
@@ -147,7 +268,7 @@ function AiInterviewRoom({ settings, questions }) {
 
         <div className="room-header__group">
           <span className="rm-badge">
-            {answers.length} of {questions.length} answered
+            {answers.length} of {totalQuestions} answered
           </span>
           <span className="rm-timer">{formatElapsed(elapsed)}</span>
           <button
@@ -206,34 +327,51 @@ function AiInterviewRoom({ settings, questions }) {
             <button
               className="rm-btn rm-btn--primary"
               onClick={submitAnswer}
+              disabled={scoring }
             >
-              {answeredCurrent ? "Re-evaluate answer" : "Submit answer"}
+              {scoring
+                ? "Scoring…"
+                : answeredCurrent
+                ? "Re-evaluate answer"
+                : "Submit answer"}
             </button>
 
-            {!isLast && (
+            {!isLast && !allAnswered && (
               <button className="rm-btn rm-btn--outline" onClick={nextQuestion}>
                 Next question
               </button>
+            )}
+
+            {allAnswered && (
+              <span className="rm-card__note">
+                All questions answered — finish to see your results.
+              </span>
             )}
           </div>
         </section>
 
         <aside className="room-side">
           <QuestionPanel
-            number={qIndex + 1}
-            total={questions.length}
+            number={questionNumber}
+            total={totalQuestions}
             type={settings.type}
-            question={questions[qIndex]}
+            question={currentQuestion}
           />
-          <TranscriptPanel lines={lines} interim={interim} supported={supported} />
+          <TranscriptPanel 
+            lines={lines} 
+            interim={interim} 
+            supported={supported} 
+          />
+
           <FeedbackPanel scores={scores} feedback={feedback} />
+
           <SessionInfo
             participantCount={1}
-            roomId={roomId}
+            roomId={badgeId}
             mode={settings.mode}
             type={settings.type}
             duration={`${settings.duration} min`}
-            connected={roomId !== "" && roomId !== "OFFLINE"}
+            connected={apiMode}
           />
         </aside>
       </main>

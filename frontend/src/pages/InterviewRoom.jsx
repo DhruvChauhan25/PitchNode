@@ -57,6 +57,17 @@ function LiveInterviewRoom({ settings, questions }) {
   const [sharing, setSharing] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  //question navigation
+  const [qIndex, setQIndex] = useState(0);
+  const isFriendMode = settings.mode === "friend";
+
+  //role split, creator (host) vs joiner (interviewer)
+  const isInterviewer = isFriendMode ? !isHost : true;
+
+  //participant labels
+  const localLabel = isHost ? "Interviewee" : "Peer";
+  const remoteLabel = isHost ? "Peer" : "Interviewee";
+
   const screenTrackRef = useRef(null);
 
   const { supported, lines, interim } = useSpeechRecognition({ enabled: joined && micOn,});
@@ -87,6 +98,7 @@ function LiveInterviewRoom({ settings, questions }) {
     return () => {
       socket.off("participant-count");
       socket.off("participant-joined");
+      socket.off("question-changed");
     };
   }, [socket]);
 
@@ -254,6 +266,16 @@ function LiveInterviewRoom({ settings, questions }) {
     }
   };
 
+  const goToQuestion = (next) => { 
+    const clamped = Math.max(0, Math.min(next, questions.length - 1));
+    setQIndex(clamped);
+
+    //Sync to the peer. No-op until the session-service relays it.
+    if(rooomId) socket.emit("question-changed", { roomId, questionIndex: clamped });
+  }
+  const nextQuestion = () => goToQuestion(qIndex + 1);
+  const prevQuestion = () => goToQuestion(qIndex - 1);
+
   const live = connected && participantCount >= 2;
 
   return (
@@ -291,7 +313,7 @@ function LiveInterviewRoom({ settings, questions }) {
           )}
           {joined && (
             <button className="rm-btn rm-btn--danger" onClick={leaveRoom}>
-              Leave interview
+              Finish interview
             </button>
           )}
         </div>
@@ -327,11 +349,11 @@ function LiveInterviewRoom({ settings, questions }) {
                   Share the room link to invite them.
                 </div>
               )}
-              <span className="rm-video__label">Interviewer</span>
+              <span className="rm-video__label">{remoteLabel}</span>
 
               <div className="rm-video rm-video--pip">
                 <VideoPanel stream={localStream} muted mirrored />
-                <span className="rm-video__label">You</span>
+                <span className="rm-video__label">You · {localLabel}</span>
               </div>
             </div>
 
@@ -376,11 +398,33 @@ function LiveInterviewRoom({ settings, questions }) {
 
           <aside className="room-side">
             <QuestionPanel
-              number={1}
+              number={qIndex + 1}
               total={questions.length}
               type={settings.type}
-              question={questions[0]}
+              question={questions[qIndex]}
+              prompter={isFriendMode && isInterviewer}
             />
+            {isInterviewer && (
+              <div className="rm-qnav">
+                <button
+                  className="rm-btn rm-btn--outline"
+                  onClick={prevQuestion}
+                  disabled={qIndex === 0}
+                >
+                  Previous
+                </button>
+                <span className="rm-qnav__count">
+                  {qIndex + 1} / {questions.length}
+                </span>
+                <button
+                  className="rm-btn rm-btn--primary"
+                  onClick={nextQuestion}
+                  disabled={qIndex === questions.length - 1}
+                >
+                  Next question
+                </button>
+              </div>
+            )}
             <TranscriptPanel
               lines={lines}
               interim={interim}

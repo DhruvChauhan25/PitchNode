@@ -661,3 +661,33 @@
     transition: none;
   }
 }
+
+/* Live-room question navigation (Human + Friend modes) */
+.rm-qnav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 4px;
+}
+.rm-qnav__count {
+  font: 600 13px/1 ui-monospace, "SF Mono", Consolas, monospace;
+  color: var(--rm-text-dim);
+}
+.rm-qnav .rm-btn {
+  flex: 0 0 auto;
+}
+
+/* Friend-mode prompter emphasis */
+.rm-card--prompter {
+  border-color: var(--rm-accent);
+  box-shadow: 0 0 0 3px rgba(170, 59, 255, 0.12), var(--rm-shadow);
+}
+.rm-question__hint {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--rm-stroke);
+  font-size: 12.5px;
+  color: var(--rm-accent-deep);
+  font-weight: 500;
+}
