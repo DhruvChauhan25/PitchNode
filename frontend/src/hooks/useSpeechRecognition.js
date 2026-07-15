@@ -1,6 +1,9 @@
 import {useCallback, useEffect, useState} from "react";
 
-const SpeechRecognition = typeof window !== "undefined" ? window.SpeechRecognition || window.webkitSpeechRecognition : undefined;
+const SpeechRecognition = 
+    typeof window !== "undefined" 
+        ? window.SpeechRecognition || window.webkitSpeechRecognition 
+        : undefined;
 
 export default function useSpeechRecognition({ enabled }) {
     const supported = Boolean(SpeechRecognition);
@@ -18,7 +21,7 @@ export default function useSpeechRecognition({ enabled }) {
         
         recognition.onresult = (event) => {
             let interimText = "";
-            const finals = {};
+            const finals = [];
             for (let i = event.resultIndex; i < event.results.length; ++i) {
                 const text = event.results[i][0].transcript;
                 if (event.results[i].isFinal) finals.push(text.trim());
@@ -60,6 +63,11 @@ export default function useSpeechRecognition({ enabled }) {
         };
     }, [enabled, supported]);
 
-    return { supported, lines, interim, transcript: lines.join(" ")};   
+    const reset = useCallback(() => {
+        setLines([]);
+        setInterim("");
+    }, []);
+
+    return { supported, lines, interim, transcript: lines.join(" "), reset };   
             
 }

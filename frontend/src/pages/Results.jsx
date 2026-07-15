@@ -1,6 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Logo from "../components/Logo";
+import {getResultsApi} from "../api/interviewApi";
 
 const METRIC_LABELS = {
   communication: "Communication",
@@ -32,15 +33,41 @@ function metricAverages(answers) {
 function Results() {
   const { state } = useLocation();
   const navigate = useNavigate();
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     document.title = "Interview results — PitchNode";
   }, []);
 
-  /* Deep-linking /results without a session goes back to setup */
   useEffect(() => {
-    if (!state?.answers?.length) navigate("/setup", { replace: true });
+    let cancelled = false;
+
+    (async () => {
+      if (state?.sessionId && state.sessionId !== "OFFLINE") {
+        try {
+          const res = await getResultsApi(state.sessionId);
+          if (!cancelled) {
+            setData(res.data);
+            setLoading(false);
+          }
+        } catch (err) {
+          console.error("Failed to fetch results", err);
+          setLoading(false);
+        }
+      }
+    })();
+    if (!state?.answers?.length) {
+      if (!cancelled) { 
+        setData(normalizeState(state)); setLoading(false); 
+      } else { 
+        navigate("/setup", { replace: true }); 
+      }
+    }
   }, [state, navigate]);
+
+  if(loading) return null;
+  if(!data) return null;
 
   if (!state?.answers?.length) return null;
 
