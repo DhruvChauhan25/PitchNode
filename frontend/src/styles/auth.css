@@ -1,0 +1,384 @@
+/* ============================================================
+   PitchNode · Auth & Admin
+   Uses the shared design tokens from pitchnode.css
+   ============================================================ */
+
+.auth-splash {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: var(--text-dim);
+  font: 500 14px/1 var(--body);
+}
+
+.auth-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px 64px;
+}
+
+.auth-card {
+  width: min(440px, 100%);
+  padding: 32px 30px;
+}
+
+.auth-card--wide {
+  width: min(560px, 100%);
+}
+
+.auth-card h1 {
+  font-size: 26px;
+  margin-bottom: 6px;
+}
+
+.auth-card__sub {
+  font-size: 14.5px;
+  color: var(--text-dim);
+  margin-bottom: 22px;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-label {
+  font: 600 12.5px/1 var(--display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 14px 0 7px;
+}
+
+.auth-form .auth-label:first-child {
+  margin-top: 0;
+}
+
+.auth-submit {
+  width: 100%;
+  margin-top: 22px;
+}
+
+.auth-error {
+  margin-top: 14px;
+  padding: 11px 14px;
+  border-radius: var(--radius);
+  background: #fdecec;
+  color: #b3383c;
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.auth-alt {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--text-dim);
+}
+
+.auth-note {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text);
+  padding: 14px;
+  border-radius: var(--radius);
+  background: var(--paper);
+  border: 1px solid var(--stroke);
+  margin-bottom: 20px;
+}
+
+.auth-devhint {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--stroke-strong);
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.auth-devhint code {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  color: var(--accent-deep);
+}
+
+.auth-badge {
+  display: inline-block;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font: 600 11.5px/1 var(--body);
+  letter-spacing: 0.04em;
+  margin-bottom: 14px;
+}
+
+.auth-badge--warn {
+  background: #fdf3e0;
+  color: #9a6404;
+}
+
+/* Role picker on register */
+.auth-roles {
+  display: grid;
+  gap: 10px;
+}
+
+.auth-role {
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1.5px solid var(--stroke-strong);
+  background: var(--surface);
+  cursor: pointer;
+  font-family: var(--body);
+  transition: border-color 0.15s ease, box-shadow 0.2s ease;
+}
+
+.auth-role:hover {
+  border-color: var(--accent);
+}
+
+.auth-role--active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(170, 59, 255, 0.14);
+}
+
+.auth-role__name {
+  display: block;
+  font: 700 14.5px/1.3 var(--display);
+  color: var(--text-h);
+  margin-bottom: 4px;
+}
+
+.auth-role__desc {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+/* ============================================================
+   Admin / Expert surfaces
+   ============================================================ */
+
+.admin-nav__right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-main {
+  flex: 1;
+  width: min(1080px, 100%);
+  margin: 0 auto;
+  padding: 8px clamp(18px, 4vw, 40px) 56px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.admin-head h1 {
+  font-size: clamp(24px, 3.5vw, 30px);
+  margin-bottom: 5px;
+}
+
+.admin-head p {
+  color: var(--text-dim);
+  font-size: 14.5px;
+}
+
+.admin-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+}
+
+.admin-stat {
+  padding: 16px 18px;
+}
+
+.admin-stat__label {
+  font: 600 11.5px/1 var(--display);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+
+.admin-stat__value {
+  font: 700 28px/1 var(--display);
+  color: var(--text-h);
+}
+
+.admin-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.admin-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--stroke-strong);
+  background: var(--surface);
+  color: var(--text);
+  font: 600 13px/1 var(--body);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.admin-filter:hover {
+  border-color: var(--accent);
+}
+
+.admin-filter--active {
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+  color: #fff;
+}
+
+.admin-filter__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--warn);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.admin-filter--active .admin-filter__count {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.admin-search {
+  max-width: 280px;
+}
+
+.admin-table {
+  padding: 6px;
+  overflow-x: auto;
+}
+
+.admin-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.admin-table th {
+  text-align: left;
+  padding: 12px 14px;
+  font: 700 11.5px/1 var(--display);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--stroke);
+  white-space: nowrap;
+}
+
+.admin-table td {
+  padding: 14px;
+  border-bottom: 1px solid var(--stroke);
+  vertical-align: middle;
+}
+
+.admin-table tr:last-child td {
+  border-bottom: none;
+}
+
+.admin-name {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.admin-email {
+  color: var(--text-dim);
+}
+
+.admin-role {
+  display: inline-block;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font: 600 11.5px/1.4 var(--body);
+  background: var(--paper);
+  border: 1px solid var(--stroke-strong);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.admin-role--admin {
+  background: var(--accent-soft);
+  border-color: transparent;
+  color: var(--accent-deep);
+}
+
+.admin-role--expert {
+  background: #e5f8f0;
+  border-color: transparent;
+  color: #0d7a4f;
+}
+
+.admin-role--expert_applicant {
+  background: #fdf3e0;
+  border-color: transparent;
+  color: #9a6404;
+}
+
+.admin-status {
+  font: 600 12px/1 var(--body);
+}
+
+.admin-status--ok {
+  color: var(--good);
+}
+
+.admin-status--wait {
+  color: var(--warn);
+}
+
+.admin-col-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.admin-action {
+  padding: 7px 14px;
+  font-size: 12.5px;
+  margin-left: 8px;
+}
+
+.admin-muted {
+  color: var(--text-dim);
+}
+
+.admin-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+@media (max-width: 640px) {
+  .admin-search {
+    max-width: none;
+    width: 100%;
+  }
+}
