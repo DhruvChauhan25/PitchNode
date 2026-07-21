@@ -1,33 +1,21 @@
 import { useEffect, useRef } from "react";
 
-function VideoPanel() {
+function VideoPanel({ stream, muted = true, mirrored = false }) {
   const videoRef = useRef(null);
 
   useEffect(() => {
-    const startCamera = async () => {
-      try {
-        const stream =
-          await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: true,
-          });
-
-        videoRef.current.srcObject = stream;
-      } catch (err) {
-        console.log(err);
-      }
-    };
-
-    startCamera();
-  }, []);
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
 
   return (
     <video
       ref={videoRef}
       autoPlay
-      muted
+      muted={muted}
       playsInline
-      width="100%"
+      className={`rm-video__el${mirrored ? " rm-video__el--mirror" : ""}`}
     />
   );
 }

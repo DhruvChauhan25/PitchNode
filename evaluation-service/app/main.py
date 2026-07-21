@@ -1,10 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import session, rubric
+from app.routers import session, rubric, questions, evaluations
 
-app = FastAPI(title="PitchNode Backend", version="0.1.0")
+app = FastAPI(title="PitchNode Backend", version="0.3.0")
 
-# Allow the React to call this API.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,8 +14,9 @@ app.add_middleware(
 
 app.include_router(session.router)
 app.include_router(rubric.router)
-
+app.include_router(questions.router)
+app.include_router(evaluations.router)
 
 @app.get("/")
 def health_check():
-    return {"status": "ok", "service": "pitchnode-backend"}
+    return {"status": "ok", "service": "pitchnode-backend", "version": "0.3.0"}

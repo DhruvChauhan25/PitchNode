@@ -1,7 +1,36 @@
-function SessionInfo({ roomId }) {
+const MODE_LABELS = { ai: "AI Interviewer", human: "With a Human", friend: "With a Friend" };
+
+function SessionInfo({
+  participantCount = 0,
+  roomId = "",
+  mode = "human",
+  type = "Technical",
+  duration = "30 min",
+  connected = false,
+}) {
+  const rows = [
+    { key: "Mode", val: MODE_LABELS[mode] ?? mode },
+    { key: "Participants", val: participantCount },
+    { key: "Room ID", val: roomId || "—" },
+    { key: "Interview type", val: type },
+    { key: "Duration", val: duration },
+    { key: "Connection quality", val: connected ? "Good" : "—" },
+  ];
+
   return (
-    <div className="alert alert-info">
-      Session ID: {roomId}
+    <div className="rm-card rm-anim rm-anim--4">
+      <div className="rm-card__head">
+        <h3 className="rm-card__title">Session info</h3>
+      </div>
+
+      <div className="rm-info">
+        {rows.map(({ key, val }) => (
+          <div className="rm-info__row" key={key}>
+            <span className="rm-info__key">{key}</span>
+            <span className="rm-info__val">{val}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

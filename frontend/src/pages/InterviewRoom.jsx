@@ -1,145 +1,464 @@
-import {useEffect, useState} from "react";
-import {io} from "socket.io-client";
-import axios from "axios";
+import { useEffect, useState, useRef, useSyncExternalStore } from "react";
+import { io } from "socket.io-client";
+import { useLocation } from "react-router-dom";
 
-import {createRoomApi, checkRoomApi} from "../api/sessionApi";
+import { createRoomApi, checkRoomApi } from "../api/sessionApi";
+import VideoPanel from "../components/VideoPanel";
+import RoomControls from "../components/RoomControls";
+import QuestionPanel from "../components/QuestionPanel";
+import TranscriptPanel from "../components/TranscriptPanel";
+import FeedbackPanel from "../components/FeedbackPanel";
+import SessionInfo from "../components/SessionInfo";
+import {
+  MicIcon,
+  MicOffIcon,
+  CamIcon,
+  CamOffIcon,
+  ScreenIcon,
+  LeaveIcon,
+  CopyIcon,
+  CheckIcon,
+} from "../components/RoomIcons";
+import { getQuestions } from "../data/questionBank";
+import AiInterviewRoom from "./AiInterviewRoom";
+import useLocalMedia from "../hooks/useLocalMedia";
+import useSpeechRecognition from "../hooks/useSpeechRecognition";
+import usePeerConnection from "../hooks/usePeerConnection";
+import "../styles/room.css";
 
-const socket = io("http://localhost:5001");
-
-function InterviewRoom() {
-    const [createdRoomId, setCreatedRoomId] = useState("");
-    const [roomId, setRoomId] = useState("");
-    const [messages, setMessages] = useState([]);
-    const [participantCount, setParticipantCount] = useState(0);
-    const [joined, setJoined] = useState(false);
-    const [error, setError] = useState("");
-
-    useEffect(() => {
-        socket.on("message", (msg) => {
-            setMessages((prev) => [...prev, msg]);
-        }); 
-
-        socket.on("participant-count", (count) => {
-            setParticipantCount(count);
-        });
-
-        return () => {
-            socket.off("message");
-            socket.off("participant-count");
-        };
-    }, []);
-
-    const createRoom = async () => {
-        try {
-            const response = await createRoomApi();
-            setCreatedRoomId(response.data.roomId);
-            setRoomId(response.data.roomId);
-        } catch (err) {
-            console.error("Error creating room:", err);
-        }
-    };
-
-    const joinRoom = async () => {
-        if(!roomId) {
-            setError("Please enter a valid Room ID");
-            return;
-        }
-
-        try{
-            const response = await checkRoomApi(roomId);
-
-                if(!response.data.exists) {
-                    setError("Room does not exist. Please check the Room ID.");
-                    return;
-                }
-                socket.emit("join-session", roomId);
-                setError("");
-                setJoined(true);
-        } catch (err) {
-            console.error("Error joining room:", err);
-        }
-    };
-
-    const leaveRoom = () => {
-        if(roomId) {
-            socket.emit("leave-session", roomId);
-            setParticipantCount(0);
-            setJoined(false);
-        }
-    };
-
-    return (
-        <div className="container mt-5">
-            <h2>Interview Room</h2>
-
-            <input
-                className="form-control mb-3"
-                type="text"
-                placeholder="Enter Room ID"
-                value={roomId}
-                onChange={(e) => setRoomId(e.target.value)}
-            />
-{
-            <button
-                className="btn btn-success mb-3 me-2"
-                onClick={createRoom}
-                >
-                Create Room
-            </button>
+function formatElapsed(totalSeconds) {
+  const m = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
+  const s = String(totalSeconds % 60).padStart(2, "0");
+  return `${m}:${s}`;
 }
-            {!joined ? (
-                <button
-                    className="btn btn-primary mb-3 me-2"
-                    onClick={joinRoom}
-                >
-                    Join Room
-                </button>
-                ) : (
-                <button
-                    className="btn btn-danger mb-3 me-2"
-                    onClick={leaveRoom}
-                >
-                    Leave Room
-                </button>
-            )}
 
-            {createdRoomId && (
-                <div className="alert alert-success">
-                    Room Created: {createdRoomId}
-                </div>
-            )}
+const DEFAULT_SETTINGS = {
+  mode: "human",
+  type: "Technical",
+  difficulty: "Medium",
+  duration: 30,
+};
 
-            {roomId && !createdRoomId && (
-                <div className="alert alert-info">
-                    Attempting to join Room: {roomId}
-                </div>
-            )}
+function LiveInterviewRoom({ settings, questions }) {
+  const [createdRoomId, setCreatedRoomId] = useState("");
+  const [roomId, setRoomId] = useState(
+    () => new URLSearchParams(window.location.search).get("roomId") || ""
+  );
+  const [participantCount, setParticipantCount] = useState(0);
+  const [joined, setJoined] = useState(false);
+  const [isHost, setIsHost] = useState(false);
+  const [participantJoinedSignal, setParticipantJoinedSignal] = useState(0);
+  const [error, setError] = useState("");
 
-            {error && (
-                <div className="alert alert-danger">
-                    {error}
-                </div>
-            )}
+  /* UI-only state — no signaling impact */
+  const [elapsed, setElapsed] = useState(0);
+  const [micOn, setMicOn] = useState(true);
+  const [camOn, setCamOn] = useState(true);
+  const [sharing, setSharing] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-            <div className="card mt-3">
-                <div className="card-body text-center">
-                    <h5>Session Statistics</h5>
-                    <h3>{participantCount}</h3>
-                    <p>Participants Connected</p>
+  //question navigation
+  const [qIndex, setQIndex] = useState(0);
+  const isFriendMode = settings.mode === "friend";
+
+  //role split, creator (host) vs joiner (interviewer)
+  const isInterviewer = isFriendMode ? !isHost : true;
+
+  //participant labels
+  const localLabel = isHost ? "Interviewee" : "Peer";
+  const remoteLabel = isHost ? "Peer" : "Interviewee";
+
+  const screenTrackRef = useRef(null);
+
+  const { supported, lines, interim } = useSpeechRecognition({ enabled: joined && micOn,});
+
+  const socketRef = useRef(null);
+  if (!socketRef.current) {
+    socketRef.current = io("http://localhost:5001");
+  }
+  const socket = socketRef.current;
+
+  const localStream = useLocalMedia();
+  const { peerConnectionRef, remoteStream } = usePeerConnection({
+    socket,
+    roomId,
+    localStream,
+  });
+
+  useEffect(() => {
+    socket.on("participant-count", (count) => {
+      setParticipantCount(count);
+    });
+
+    socket.off("participant-joined");
+    socket.on("participant-joined", () => {
+      setParticipantJoinedSignal((prev) => prev + 1);
+    });
+
+    return () => {
+      socket.off("participant-count");
+      socket.off("participant-joined");
+      socket.off("question-changed");
+    };
+  }, [socket]);
+
+  useEffect(() => {
+    if (!isHost || participantJoinedSignal === 0 || !localStream) return;
+
+    const pc = peerConnectionRef.current;
+    if (!pc) return;
+
+    let cancelled = false;
+
+    (async () => {
+      const offer = await pc.createOffer();
+      if (cancelled) return;
+      await pc.setLocalDescription(offer);
+      socket.emit("offer", { roomId, offer });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isHost, participantJoinedSignal, localStream, roomId]);
+
+  /* Track Socket.IO connection for the status badge */
+  const connected = useSyncExternalStore(
+    (notify) => {
+      socket.on("connect", notify);
+      socket.on("disconnect", notify);
+      return () => {
+        socket.off("connect", notify);
+        socket.off("disconnect", notify);
+      };
+    },
+    () => socket.connected
+  );
+
+  /* Session timer — runs while joined */
+  useEffect(() => {
+    if (!joined) return;
+    const id = setInterval(() => setElapsed((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, [joined]);
+
+  const createRoom = async () => {
+    try {
+      const response = await createRoomApi();
+      const newRoomId = response?.data?.roomId;
+
+      setCreatedRoomId(newRoomId);
+      setRoomId(newRoomId);
+      setIsHost(true);
+      setElapsed(0);
+      setJoined(true);
+
+      socket.emit("join-session", newRoomId);
+    } catch (err) {
+      console.error("Error creating room:", err);
+      setError("Could not create a room. Is the session service running?");
+    }
+  };
+
+  const joinRoom = async () => {
+    if (!roomId) {
+      setError("Please enter a valid Room ID");
+      return;
+    }
+
+    try {
+      const response = await checkRoomApi(roomId);
+
+      if (!response.data.exists) {
+        setError("Room does not exist. Please check the Room ID.");
+        return;
+      }
+
+      socket.emit("join-session", roomId);
+      setElapsed(0);
+      setJoined(true);
+      setError("");
+    } catch (err) {
+      console.error("Error joining room:", err);
+      setError("Could not reach the session service.");
+    }
+  };
+
+  const leaveRoom = () => {
+    if (!roomId) {
+      setError("No Room ID found. Cannot leave room.");
+      return;
+    }
+
+    if (sharing) stopScreenShare();
+
+    socket.emit("leave-session", roomId);
+
+    setJoined(false);
+    setIsHost(false);
+    setCreatedRoomId("");
+    setRoomId("");
+    setParticipantCount(0);
+
+    /* Re-enable local tracks so the next session starts clean */
+    localStream?.getAudioTracks().forEach((t) => (t.enabled = true));
+    localStream?.getVideoTracks().forEach((t) => (t.enabled = true));
+    setMicOn(true);
+    setCamOn(true);
+  };
+
+  const toggleMic = () => {
+    if (!localStream) return;
+    const next = !micOn;
+    localStream.getAudioTracks().forEach((t) => (t.enabled = next));
+    setMicOn(next);
+  };
+
+  const toggleCam = () => {
+    if (!localStream) return;
+    const next = !camOn;
+    localStream.getVideoTracks().forEach((t) => (t.enabled = next));
+    setCamOn(next);
+  };
+
+  function stopScreenShare() {
+    const camTrack = localStream?.getVideoTracks()[0];
+    const sender = peerConnectionRef.current
+      ?.getSenders()
+      .find((s) => s.track && s.track.kind === "video");
+    if (sender && camTrack) sender.replaceTrack(camTrack);
+    screenTrackRef.current?.stop();
+    screenTrackRef.current = null;
+    setSharing(false);
+  }
+
+  const toggleScreenShare = async () => {
+    if (sharing) {
+      stopScreenShare();
+      return;
+    }
+    try {
+      const display = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+      });
+      const track = display.getVideoTracks()[0];
+      const sender = peerConnectionRef.current
+        ?.getSenders()
+        .find((s) => s.track && s.track.kind === "video");
+      if (sender) await sender.replaceTrack(track);
+      track.onended = () => stopScreenShare();
+      screenTrackRef.current = track;
+      setSharing(true);
+    } catch (err) {
+      console.error("Screen share failed:", err);
+    }
+  };
+
+  const copyRoomLink = async () => {
+    if (!roomId) return;
+    const link = `${window.location.origin}/room?roomId=${roomId}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Could not copy link:", err);
+    }
+  };
+
+  const goToQuestion = (next) => { 
+    const clamped = Math.max(0, Math.min(next, questions.length - 1));
+    setQIndex(clamped);
+
+    //Sync to the peer. No-op until the session-service relays it.
+    if(rooomId) socket.emit("question-changed", { roomId, questionIndex: clamped });
+  }
+  const nextQuestion = () => goToQuestion(qIndex + 1);
+  const prevQuestion = () => goToQuestion(qIndex - 1);
+
+  const live = connected && participantCount >= 2;
+
+  return (
+    <div className="room-page">
+      <header className="room-header">
+        <div className="room-header__group">
+          <h1>Interview Room</h1>
+          {joined && roomId && (
+            <span className="rm-badge rm-badge--id">{roomId}</span>
+          )}
+          <span
+            className={`rm-badge ${
+              !connected
+                ? "rm-badge--off"
+                : live
+                ? "rm-badge--live"
+                : "rm-badge--wait"
+            }`}
+          >
+            <span className={`rm-dot${live ? " rm-dot--pulse" : ""}`} />
+            {!connected ? "Disconnected" : live ? "Live" : "Waiting"}
+          </span>
+        </div>
+
+        <div className="room-header__group">
+          <span className="rm-badge">
+            {participantCount} participant{participantCount === 1 ? "" : "s"}
+          </span>
+          {joined && <span className="rm-timer">{formatElapsed(elapsed)}</span>}
+          {joined && (
+            <button className="rm-btn rm-btn--outline" onClick={copyRoomLink}>
+              {copied ? <CheckIcon /> : <CopyIcon />}
+              {copied ? "Copied" : "Copy link"}
+            </button>
+          )}
+          {joined && (
+            <button className="rm-btn rm-btn--danger" onClick={leaveRoom}>
+              Finish interview
+            </button>
+          )}
+        </div>
+      </header>
+
+      {!joined ? (
+        <main className="room-lobby">
+          <RoomControls
+            roomId={roomId}
+            setRoomId={setRoomId}
+            createdRoomId={createdRoomId}
+            error={error}
+            createRoom={createRoom}
+            joinRoom={joinRoom}
+            copyRoomLink={copyRoomLink}
+            copied={copied}
+          />
+        </main>
+      ) : (
+        <main className="room-main">
+          <section className="room-stage rm-anim">
+            <div className="rm-video">
+              <VideoPanel stream={remoteStream} muted={false} />
+              {!remoteStream && (
+                <div className="rm-video__empty">
+                  <span
+                    className="pn-node"
+                    style={{ width: 14, height: 14 }}
+                    aria-hidden="true"
+                  />
+                  Waiting for the other participant to join…
+                  <br />
+                  Share the room link to invite them.
                 </div>
+              )}
+              <span className="rm-video__label">{remoteLabel}</span>
+
+              <div className="rm-video rm-video--pip">
+                <VideoPanel stream={localStream} muted mirrored />
+                <span className="rm-video__label">You · {localLabel}</span>
+              </div>
             </div>
 
-            <hr/>
+            <div className="room-controlbar">
+              <button
+                className={`rm-ctl${micOn ? "" : " rm-ctl--off"}`}
+                onClick={toggleMic}
+                aria-label={micOn ? "Mute microphone" : "Unmute microphone"}
+                title={micOn ? "Mute microphone" : "Unmute microphone"}
+              >
+                {micOn ? <MicIcon /> : <MicOffIcon />}
+              </button>
 
-            {messages.map((msg, index) => (
-                <div key={index} className="card mb-2">
-                    <div className="card-body">
-                        {msg}
-                    </div>
-                </div>
-            ))}
-        </div>
-    );
+              <button
+                className={`rm-ctl${camOn ? "" : " rm-ctl--off"}`}
+                onClick={toggleCam}
+                aria-label={camOn ? "Turn camera off" : "Turn camera on"}
+                title={camOn ? "Turn camera off" : "Turn camera on"}
+              >
+                {camOn ? <CamIcon /> : <CamOffIcon />}
+              </button>
+
+              <button
+                className={`rm-ctl${sharing ? " rm-ctl--active" : ""}`}
+                onClick={toggleScreenShare}
+                aria-label={sharing ? "Stop sharing screen" : "Share screen"}
+                title={sharing ? "Stop sharing screen" : "Share screen"}
+              >
+                <ScreenIcon />
+              </button>
+
+              <button
+                className="rm-ctl rm-ctl--leave"
+                onClick={leaveRoom}
+                aria-label="Leave interview"
+              >
+                <LeaveIcon />
+                Leave
+              </button>
+            </div>
+          </section>
+
+          <aside className="room-side">
+            <QuestionPanel
+              number={qIndex + 1}
+              total={questions.length}
+              type={settings.type}
+              question={questions[qIndex]}
+              prompter={isFriendMode && isInterviewer}
+            />
+            {isInterviewer && (
+              <div className="rm-qnav">
+                <button
+                  className="rm-btn rm-btn--outline"
+                  onClick={prevQuestion}
+                  disabled={qIndex === 0}
+                >
+                  Previous
+                </button>
+                <span className="rm-qnav__count">
+                  {qIndex + 1} / {questions.length}
+                </span>
+                <button
+                  className="rm-btn rm-btn--primary"
+                  onClick={nextQuestion}
+                  disabled={qIndex === questions.length - 1}
+                >
+                  Next question
+                </button>
+              </div>
+            )}
+            <TranscriptPanel
+              lines={lines}
+              interim={interim}
+              supported={supported}
+            />
+            <FeedbackPanel />
+            <SessionInfo
+              participantCount={participantCount}
+              roomId={roomId}
+              mode={settings.mode}
+              type={settings.type}
+              duration={`${settings.duration} min`}
+              connected={connected}
+            />
+          </aside>
+        </main>
+      )}
+    </div>
+  );
+}
+
+/*
+ * Mode fork: AI sessions are solo — no lobby, no socket, no WebRTC.
+ * Live sessions (human/friend) use the peer room below, unchanged.
+ */
+function InterviewRoom() {
+  const location = useLocation();
+  const settings = location.state?.settings ?? DEFAULT_SETTINGS;
+  const questions = getQuestions(settings.type, settings.difficulty);
+
+  if (settings.mode === "ai") {
+    return <AiInterviewRoom settings={settings} questions={questions} />;
+  }
+  return <LiveInterviewRoom settings={settings} questions={questions} />;
 }
 
 export default InterviewRoom;

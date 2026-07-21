@@ -6,15 +6,47 @@ const setupSockets = (io) => {
 
         console.log("A user connected:", socket.id);
 
+        socket.on("offer", ({ roomId, offer }) => {
+            console.log(`Received offer for room ${roomId} from ${socket.id}`);
+            socket.to(roomId).emit("offer", { 
+                offer,
+                senderId: socket.id
+             });
+        });
+
+        socket.on("answer", ({ roomId, answer }) => {
+            console.log(`Received answer for room ${roomId} from ${socket.id}`);
+            //console.log(peerConnectionRef.current.getReceivers());
+            socket.to(roomId).emit("answer", { 
+                answer,
+                senderId: socket.id
+             });
+        });
+
+        socket.on("ice-candidate", ({ roomId, candidate }) => {
+            console.log(`Received ICE candidate for room ${roomId} from ${socket.id}`);
+            socket.to(roomId).emit("ice-candidate", { 
+                candidate,
+                senderId: socket.id
+             });
+        });
+
         socket.on("join-session", (roomId) => {
 
+            console.log(`Socket ${socket.id} is trying to join room: ${roomId}`);
+
             if (!rooms[roomId]) {
+                console.log(`Room ${roomId} does not exist. Cannot join.`);
                 return;
             }
+
+            console.log("Room exists. Current participants:", rooms[roomId]);
 
             if (!rooms[roomId].includes(socket.id)) {
                 rooms[roomId].push(socket.id);
             }
+
+            console.log("Participants after joining:", rooms[roomId]);
 
             socket.join(roomId);
 
@@ -22,6 +54,11 @@ const setupSockets = (io) => {
                 "participant-count",
                 rooms[roomId].length
             );
+
+            if (rooms[roomId].length === 2) {
+                console.log("Emitting participant-joined");
+                io.to(roomId).emit("participant-joined");
+            }
         });
 
         socket.on("leave-session", (roomId) => {
@@ -35,6 +72,13 @@ const setupSockets = (io) => {
 
             io.to(roomId).emit(
                 "participant-count",
+                rooms[roomId].length
+            );
+
+            console.log(
+                "Room:",
+                roomId,
+                "Participants:",
                 rooms[roomId].length
             );
         });
