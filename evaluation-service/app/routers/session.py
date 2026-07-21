@@ -1,31 +1,35 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from app.models.session import (
     SessionCreateRequest, SessionResponse,
-    SessionHistoryResponse, SessionHistoryItem
+    SessionHistoryResponse
 )
 from app.db.supabase_client import get_supabase
+from app.db.auth import get_current_user
 
 router = APIRouter(prefix="/session", tags=["session"])
 
 
 @router.post("/start", response_model=SessionResponse, status_code=201)
-def start_session(payload: SessionCreateRequest):
+def start_session(
+    payload: SessionCreateRequest,
+    current_user: dict = Depends(get_current_user)
+):
     """
-    Creates a new interview session. Accepts user_id (required),
-    difficulty, duration, job_description, cv_text (optional).
-    Returns 201 with the full session object.
+    Creates a new interview session.
     """
     supabase = get_supabase()
+    user_id = current_user["sub"]
 
     result = (
         supabase.table("sessions")
         .insert({
             "interview_type": payload.interview_type,
-            "user_id": payload.user_id,
+            "user_id": user_id,
             "difficulty": payload.difficulty,
             "duration": payload.duration,
-            "job_description": payload.job_description,
-            "cv_text": payload.cv_text,
+            "mode": payload.mode,
+            "cv_id": payload.cv_id,
+            "jd_id": payload.jd_id,
             "status": "created",
         })
         .execute()
@@ -38,8 +42,12 @@ def start_session(payload: SessionCreateRequest):
 
 
 @router.get("/history", response_model=SessionHistoryResponse)
-def get_session_history(user_id: str):
+def get_session_history(current_user: dict = Depends(get_current_user)):
+    """
+    Returns all sessions for the authenticated user.
+    """
     supabase = get_supabase()
+    user_id = current_user["sub"]
 
     result = (
         supabase.table("sessions")
@@ -53,27 +61,41 @@ def get_session_history(user_id: str):
 
 
 @router.get("/{session_id}", response_model=SessionResponse)
-def get_session(session_id: str):
-    """Fetch a single session by ID."""
+def get_session(
+    session_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Fetch a single session only accessible by the session's owner."""
     supabase = get_supabase()
+    user_id = current_user["sub"]
 
     result = supabase.table("sessions").select("*").eq("id", session_id).execute()
 
     if not result.data:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    return result.data[0]
+    session = result.data[0]
+
+    # 404 instead of 403 don't leak that the session exists
+    if session["user_id"] != user_id:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    return session
 
 
 @router.post("/{session_id}/complete")
-def complete_session(session_id: str):
-    """
-    Marks the session complete and computes the overall score
-    as the average of all evaluation scores for this session.
-    """
+def complete_session(
+    session_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Marks session complete and computes overall_score."""
     supabase = get_supabase()
+    user_id = current_user["sub"]
 
-    # Fetch all evaluations for particular session
+    session_result = supabase.table("sessions").select("user_id").eq("id", session_id).execute()
+    if not session_result.data or session_result.data[0]["user_id"] != user_id:
+        raise HTTPException(status_code=404, detail="Session not found")
+
     evals = (
         supabase.table("evaluations")
         .select("overall_score")
@@ -84,7 +106,6 @@ def complete_session(session_id: str):
     scores = [e["overall_score"] for e in evals.data if e.get("overall_score") is not None]
     overall = round(sum(scores) / len(scores), 1) if scores else None
 
-    # Mark session complete and store overall score
     supabase.table("sessions").update({
         "status": "completed",
         "overall_score": overall,
@@ -94,14 +115,21 @@ def complete_session(session_id: str):
 
 
 @router.get("/{session_id}/results")
-def get_session_results(session_id: str):
+def get_session_results(
+    session_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Powers the dashboard """
     supabase = get_supabase()
+    user_id = current_user["sub"]
 
-    # Fetch session
     session_result = supabase.table("sessions").select("*").eq("id", session_id).execute()
     if not session_result.data:
         raise HTTPException(status_code=404, detail="Session not found")
+
     session = session_result.data[0]
+    if session["user_id"] != user_id:
+        raise HTTPException(status_code=404, detail="Session not found")
 
     evals = (
         supabase.table("evaluations")
@@ -113,10 +141,8 @@ def get_session_results(session_id: str):
 
     per_question = []
     all_scores: dict[str, list[float]] = {
-        "communication": [],
-        "technicalAccuracy": [],
-        "confidence": [],
-        "problemSolving": [],
+        "communication": [], "technicalAccuracy": [],
+        "confidence": [], "problemSolving": [],
     }
 
     for e in evals.data:
@@ -135,8 +161,6 @@ def get_session_results(session_id: str):
         k: round(sum(v) / len(v), 1) if v else 0
         for k, v in all_scores.items()
     }
-
-    # Derive strengths top 2 and weaknesses bottom 1
     sorted_dims = sorted(avg_scores.items(), key=lambda x: x[1], reverse=True)
     strengths = [d[0] for d in sorted_dims[:2] if d[1] > 0]
     weaknesses = [d[0] for d in sorted_dims[-1:] if d[1] > 0]

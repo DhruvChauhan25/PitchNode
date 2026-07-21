@@ -82,7 +82,7 @@ def get_next_question(session_id: str):
     question = sq["questions"]
     question_number = sq["question_order"]
 
-    # Count total questions queued for this session
+    # Count total questions queued for session
     total_result = (
         supabase.table("session_questions")
         .select("id", count="exact")
@@ -105,8 +105,7 @@ def get_next_question(session_id: str):
 @router.post("/{session_id}/answered/{question_id}", response_model=dict)
 def mark_answered(session_id: str, question_id: str):
     """
-    Marks a question as answered so the next call to forward.
-    Call this after the candidate finishes speaking.
+    Marks a question as answered so the next call to forward
     """
     supabase = get_supabase()
 

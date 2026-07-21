@@ -5,11 +5,11 @@ from datetime import datetime
 
 class SessionCreateRequest(BaseModel):
     interview_type: Literal["technical", "hr", "behavioral"]
-    user_id: str                                        # required — professor's graded deliverable
     difficulty: Optional[Literal["easy", "medium", "hard"]] = "medium"
-    duration: Optional[Literal[15, 30, 45]] = 30       # minutes
-    job_description: Optional[str] = None
-    cv_text: Optional[str] = None
+    duration: Optional[Literal[15, 30, 45]] = 30
+    mode: Optional[Literal["ai", "human", "friend"]] = "ai"
+    cv_id: Optional[str] = None
+    jd_id: Optional[str] = None
 
 
 class SessionResponse(BaseModel):
@@ -18,6 +18,7 @@ class SessionResponse(BaseModel):
     interview_type: str
     difficulty: Optional[str]
     duration: Optional[int]
+    mode: Optional[str]
     status: str
     created_at: datetime
 

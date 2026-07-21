@@ -60,8 +60,8 @@ def evaluate_answer(payload: EvaluationRequest):
         "session_id": payload.session_id,
         "question_id": payload.question_id,
         "transcript": payload.transcript,
-        "rubric_scores": result["scores"],          # 4-key frontend scores
-        "dimension_scores": result["dimension_scores"],  # full rubric scores
+        "rubric_scores": result["scores"],         
+        "dimension_scores": result["dimension_scores"],  
         "overall_score": overall,
         "feedback": result["feedback"],
     }).execute()
