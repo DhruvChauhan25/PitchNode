@@ -11,8 +11,11 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 
 import { AuthProvider } from "./context/AuthContext";
-import { ProtectedRoute, RoleRoute } from "./components/RouteGuards";
+import { ProtectedRoute, RoleRoute } from "./components/RouteGuards.jsx";
 import { ROLES } from "./api/authApi";
+import AdminPanel from "./pages/AdminPanel";
+import ExpertDashboard from "./pages/ExpertDashboard.jsx";
+import PendingApproval from "./pages/PendingApproval.jsx";
 
 
 function App() {
@@ -51,22 +54,38 @@ function App() {
               }
             />
 
+            <Route 
+              path="/admin"
+              element={
+                <RoleRoute allow={[ROLES.ADMIN]}>
+                <AdminPanel />
+              </RoleRoute>
+              }
+            />
+
+            <Route
+              path="/expert"
+              element={
+                <RoleRoute allow={[ROLES.EXPERT]}>
+                  <ExpertDashboard />
+                </RoleRoute>
+              }
+            />
+
+            <Route
+              path="/pending"
+              element={
+                <ProtectedRoute >
+                  <PendingApproval />
+                </ProtectedRoute>
+              }
+            />
+
           <Route path="*" element={<Navigate to="/" replace />} />
 
         </Routes>
       </BrowserRouter>
     </AuthProvider>
-
-
-    // <BrowserRouter>
-    //   <Routes>
-    //     <Route path="/" element={<Landing />} />
-    //     <Route path="/room" element={<InterviewRoom />} />
-    //     <Route path="/setup" element={<InterviewSetup />} />
-    //     <Route path="/results" element={<Results />} />
-    //     <Route path="*" element={<Navigate to="/" replace />} />
-    //   </Routes>
-    // </BrowserRouter>
   );
 }
 

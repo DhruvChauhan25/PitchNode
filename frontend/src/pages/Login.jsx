@@ -16,7 +16,7 @@ function Login() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    document.title = "Sign in — PitchNode";
+    document.title = "Log in — PitchNode";
   }, []);
 
   if (isAuthenticated) {
