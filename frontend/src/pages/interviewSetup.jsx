@@ -91,6 +91,20 @@ function InterviewSetup() {
   };
 
   const startInterview = () => {
+    if(mode === "human"){
+      navigate("/request", {
+        state: {
+          prefill: {
+            jobDescriptionId: jdId || null,
+            jobDescriptionText: jdText.trim() || null,
+            cvFileName: cvFileName || null,
+            duration,
+          },
+        },
+      });
+      return;
+    }
+
     navigate("/room", {
       state: {
         settings: {

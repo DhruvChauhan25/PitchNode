@@ -16,6 +16,8 @@ import { ROLES } from "./api/authApi";
 import AdminPanel from "./pages/AdminPanel";
 import ExpertDashboard from "./pages/ExpertDashboard.jsx";
 import PendingApproval from "./pages/PendingApproval.jsx";
+import RequestInterview from "./pages/RequestInterview.jsx";
+import MyRequests from "./pages/MyRequests.jsx";
 
 
 function App() {
@@ -77,6 +79,24 @@ function App() {
               element={
                 <ProtectedRoute >
                   <PendingApproval />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/request"
+              element={
+                <ProtectedRoute>
+                  <RequestInterview />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/requests"
+              element={
+                <ProtectedRoute>
+                  <MyRequests />
                 </ProtectedRoute>
               }
             />
