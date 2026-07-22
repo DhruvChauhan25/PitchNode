@@ -30,8 +30,8 @@ export const clearTokens = () => {
 }
 
 //axios with bearer token
-export const authClient = axios.create({baseURL: BASE});
-authClient.interceptors.request.use((config) => {
+export const authedClient = axios.create({baseURL: BASE});
+authedClient.interceptors.request.use((config) => {
     const token = getToken();
     if(token) config.headers.Authorization = `Bearer ${token}`;
     return config;

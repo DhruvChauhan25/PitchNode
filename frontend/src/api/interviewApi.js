@@ -1,65 +1,59 @@
 import axios from 'axios';
+import { authedClient } from './authApi';
 
 const BASE = import.meta.env.VITE_INTERVIEW_API_URL || 'http://localhost:8000';
 
 // "Technical" | "Behavioral" | "HR" => "technical" | "behavioral" | "hr"
 const toApiType = (type) => String(type).toLowerCase();
 
-const USER_ID_KEY = "user_id";
+export const healthApi = () => authedClient.get('/');
 
-export function getUserId() {
-    try{
-        let id = localStorage.getItem(USER_ID_KEY);
-        if(!id) {
-            id = typeof crypto !== "undefined" && crypto.randomUUID 
-                ? crypto.randomUUID()
-                : `u_${Date.now()}_${Math.random().toString(36).slice(2)}`;  
-            localStorage.setItem(USER_ID_KEY, id);
-        }
-        return id;
-    } catch {
-        return `u_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-    }
-}
+//create the session 
+//user_id comes from the JWT
 
-export const healthApi = () => axios.get(`${BASE}/`);
+export const startSessionApi = (interviewType, opts = {}) =>
+  authedClient.post(`/session/start`, {
+    interview_type: toApiType(interviewType),
+    ...(opts.difficulty ? { difficulty: String(opts.difficulty).toLowerCase() } : {}),
+    ...(opts.duration ? { duration: opts.duration } : {}),
+    ...(opts.mode ? { mode: opts.mode } : {}),
+    ...(opts.cvId ? { cv_id: opts.cvId } : {}),
+    ...(opts.jdId ? { jd_id: opts.jdId } : {}),
+  });
 
-export const startSessionApi = (interviewType) => 
-    axios.post(`${BASE}/session/start`, {
-        interview_type: toApiType(interviewType),
-        user_id: getUserId(),
-    });
+export const getSessionApi = (sessionId) =>
+  authedClient.get(`/session/${sessionId}`);
 
-export const getSessionApi = (sessionId) => 
-    axios.get(`${BASE}/session/${sessionId}`);
+export const getRubricApi = (interviewType) =>
+  authedClient.get(`/rubric/${toApiType(interviewType)}`);
 
-export const getRubricApi = (interviewType) => 
-    axios.get(`${BASE}/rubric/${toApiType(interviewType)}`);
-
+//seed questions for this session
+//path param onlt, no nody
 export const startQuestionsApi = (sessionId) =>
-    // axios.post(`${BASE}/session/${sessionId}/start`);
-    axios.post(`${BASE}/session/start`);
+  authedClient.post(`/questions/${sessionId}/start`);
 
+//fetch the next unanswered question
 export const nextQuestionApi = (sessionId) =>
-    axios.get(`${BASE}/questions/${sessionId}/next`);
+  authedClient.get(`/questions/${sessionId}/next`);
 
 export const markAnsweredApi = (sessionId, questionId) =>
-  axios.post(`${BASE}/questions/${sessionId}/answered/${questionId}`);
+  authedClient.post(`/questions/${sessionId}/answered/${questionId}`);
 
 export const evaluateAnswerApi = ({ sessionId, questionId, questionText, transcript }) =>
-  axios.post(`${BASE}/evaluations`, {
+  authedClient.post(`/evaluations`, {
     session_id: sessionId,
     question_id: questionId,
     question_text: questionText,
     transcript,
   });
 
-/* results + history */
+// results + history 
 export const completeSessionApi = (sessionId) =>
-  axios.post(`${BASE}/session/${sessionId}/complete`);
+  authedClient.post(`/session/${sessionId}/complete`);
 
 export const getResultsApi = (sessionId) =>
-  axios.get(`${BASE}/session/${sessionId}/results`);
+  authedClient.get(`/session/${sessionId}/results`);
 
-export const getHistoryApi = () =>
-  axios.get(`${BASE}/sessions`, { params: { user_id: getUserId() } });
+// GET /sessions, 
+// user taken from JWT (no user_id param).
+export const getHistoryApi = () => authedClient.get(`/sessions`);
