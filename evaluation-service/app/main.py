@@ -1,13 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer
-from app.routers import session, rubric, questions, evaluations, auth
+from app.routers import session, rubric, questions, evaluations, auth, documents
 
 security = HTTPBearer()
 
 app = FastAPI(
     title="PitchNode Backend",
-    version="0.4.0",
+    version="0.5.0",
     swagger_ui_parameters={"persistAuthorization": True},
 )
 
@@ -24,8 +24,10 @@ app.include_router(session.router)
 app.include_router(rubric.router)
 app.include_router(questions.router)
 app.include_router(evaluations.router)
+app.include_router(documents.router)
 
 
+@app.get("/health")
 @app.get("/")
 def health_check():
-    return {"status": "ok", "service": "pitchnode-backend", "version": "0.4.0"}
+    return {"status": "ok", "service": "pitchnode-backend", "version": "0.5.0"}

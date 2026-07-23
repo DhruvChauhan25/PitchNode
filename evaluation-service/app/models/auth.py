@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from typing import Optional, Literal
 from datetime import datetime
 
@@ -13,6 +13,10 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
 
 
 class UserProfile(BaseModel):
