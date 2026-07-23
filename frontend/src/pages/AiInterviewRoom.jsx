@@ -7,7 +7,6 @@ import {
   nextQuestionApi,
   markAnsweredApi,
   evaluateAnswerApi,
-  getUserId,
   completeSessionApi,
 } from "../api/interviewApi";
 
@@ -232,7 +231,7 @@ function AiInterviewRoom({ settings, questions }) {
     }
 
     if (apiMode) {
-      completeSessionApi(sessionId).catch(() => {}); // best-effort
+      completeSessionApi(sessionId).catch(() => {}); 
     }
 
     navigate("/results", {
