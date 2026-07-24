@@ -155,7 +155,22 @@ def delete_cv(cv_id: str, current_user: dict = Depends(get_current_user)):
 
 @router.get("/jd/presets", response_model=JDPresetsResponse)
 def get_jd_presets():
-    return JDPresetsResponse(presets=[JDPreset(**p) for p in JD_PRESETS])
+    supabase = get_supabase()
+    result = (
+        supabase.table("job_descriptions")
+        .select("id, title, company, text")
+        .is_("user_id", "null")
+        .execute()
+    )
+    return JDPresetsResponse(presets=[
+        JDPreset(
+            id=row["id"],
+            title = row["title"],
+            company=row["company"],
+            summary=(row.get("text") or "")[:160],
+        ) 
+        for row in (result.data or [])
+    ])
 
 
 @router.post("/jd", response_model=JDResponse, status_code=201)
