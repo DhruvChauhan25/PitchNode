@@ -6,8 +6,10 @@ import {
   DIFFICULTIES,
   DURATIONS,
 } from "../data/questionBank";
-import { JOB_DESCRIPTIONS } from "../data/jobDescriptions.js";
 import { PLANS, CURRENT_USER_PLAN, getSessionsLeft } from "../config/plans";
+import useJobDescritpions from "../hooks/useJobDescription.js";
+import { uploadCvApi, createJdApi } from "../api/documentsApi.js";
+import useUserDocuments from "../hooks/useUserDocuments.js";
 
 const MODES = [
   {
@@ -35,10 +37,13 @@ const TYPE_DESCRIPTIONS = {
     "Algorithms, system design, and core CS concepts, scored on a structured rubric.",
   Behavioral:
     "STAR-format questions about past situations, actions, and outcomes.",
-  HR: "Motivation, fit, and career questions from real screening rounds.",
+  HR: 
+    "Motivation, fit, and career questions from real screening rounds.",
 };
 
 const STEPS = ["Mode", "Documents", "Configuration"];
+
+const NEW_CV_OPTION = "--upload_new__";
 
 function Segmented({ options, value, onChange, format = (v) => v, label }) {
   return (
@@ -62,16 +67,29 @@ function Segmented({ options, value, onChange, format = (v) => v, label }) {
 
 function InterviewSetup() {
   const navigate = useNavigate();
+  const {jobDescriptions} = useJobDescritpions();
+  const { cvs: savedCvs, jds: savedJds, loading: docsLoading } = useUserDocuments();
   const fileInputRef = useRef(null);
 
   const [step, setStep] = useState(0);
   const [mode, setMode] = useState("ai");
+
+  const [cvChoice, setCvChoice] = useState(""); // "" | NEW_CV_OPTION | existing cv id
+  const [pendingCvFile, setPendingCvFile] = useState(null);
+  const [cvId, setCvId] = useState(null);
   const [cvFileName, setCvFileName] = useState("");
+  const [uploadingCv, setUploadingCv] = useState(false);
+
   const [jdId, setJdId] = useState("");
   const [jdText, setJdText] = useState("");
+  const [jdTitle, setJdTitle] = useState("");
+  const [jdCompany, setJdCompany] = useState(""); 
+
   const [type, setType] = useState("Technical");
   const [difficulty, setDifficulty] = useState("Medium");
   const [duration, setDuration] = useState(30);
+  const [error, setError] = useState("");
+  const [persisting, setPersisting] = useState(false);
 
   const plan = PLANS[CURRENT_USER_PLAN];
   const sessionsLeft = getSessionsLeft();
@@ -80,17 +98,99 @@ function InterviewSetup() {
     document.title = "Set up your interview — PitchNode";
   }, []);
 
-  const onCvPicked = (e) => {
+  const onCvPicked = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    /*
-     * Stage 2: we keep the file name for the session record. Actual upload
-     * wires to POST /uploads/cv once the backend endpoint lands (P1).
-     */
+
+    //upload when hits continue
+    setPendingCvFile(file);
     setCvFileName(file.name);
+    setCvId(null);
+    setError("");
   };
 
+  const onCvChoiceChange = (value) => {
+    setCvChoice(value);
+
+    if(value === NEW_CV_OPTION){
+      setCvId(null);
+      setPendingCvFile(null);
+      setCvFileName("");
+      fileInputRef.current?.click();
+    } else if (value === ""){
+      setCvId(null);
+      setPendingCvFile(null);
+      setCvFileName("");
+    } else {
+      //exixting cv was picked, so id is already there
+      const chosen = savedCvs.find((c) => c.id === value);
+      setCvId(value);
+      setPendingCvFile(null);
+      setCvFileName(chosen?.file_name || "");
+    }
+  }
+
+  // when hits continue, upload a fresh CV and/or create a fresh JD,
+  const persistDocuments = async() => {
+    setError("");
+
+    const hasJd = Boolean(jdId) || jdText.trim().length > 0;
+    if(!hasJd){
+      setError("A job description is required to continue.");
+      return false;
+    }
+
+    if (!jdId && jdText.trim() && (!jdTitle.trim() || !jdCompany.trim())) {
+      setError("Add a role title and company for your pasted job description.");
+      return false;
+    }
+
+    setPersisting(true);
+    try{
+      let resolvedCvId = cvId;
+      if(pendingCvFile && !resolvedCvId){
+        try {
+          const res = await uploadCvApi(pendingCvFile);
+          resolvedCvId = res?.id || null;
+          setCvId(resolvedCvId);
+        } catch {
+          setError("Couldn't upload your CV. You can continue without it or try again.");
+          return false;
+        }
+      }
+
+      let resolvedJdId = jdId;
+      if (!resolvedJdId && jdText.trim()) {
+        try {
+          const res = await createJdApi({
+            title: jdTitle.trim(),
+            company: jdCompany.trim(),
+            text: jdText.trim(),
+          });
+          resolvedJdId = res?.id || null;
+          setJdId(resolvedJdId);
+        } catch {
+          setError("Couldn't save your job description. Please try again.");
+          return false;
+        }
+      }
+
+      return true;
+    } finally {
+      setPersisting(false);
+    }
+  }
+
+  const goNext = async () => {
+    if (step === 1) {
+      const ok = await persistDocuments();
+      if (!ok) return;
+    }
+    setStep((s) => s + 1);
+  }
+
   const startInterview = () => {
+
     if(mode === "human"){
       navigate("/request", {
         state: {
@@ -98,6 +198,7 @@ function InterviewSetup() {
             jobDescriptionId: jdId || null,
             jobDescriptionText: jdText.trim() || null,
             cvFileName: cvFileName || null,
+            cvId: cvId || null,
             duration,
           },
         },
@@ -113,6 +214,7 @@ function InterviewSetup() {
           difficulty,
           duration,
           cvFileName: cvFileName || null,
+          cvId: cvId || null,
           jobDescriptionId: jdId || null,
           jobDescriptionText: jdText.trim() || null,
         },
@@ -120,7 +222,9 @@ function InterviewSetup() {
     });
   };
 
-  const selectedJd = JOB_DESCRIPTIONS.find((j) => j.id === jdId);
+
+  const allJds = [...savedJds.map((j) => ({...j, _own:true })), ...jobDescriptions]
+  const selectedJd = allJds.find((j) => j.id === jdId);
 
   return (
     <>
@@ -194,18 +298,47 @@ function InterviewSetup() {
                 onChange={onCvPicked}
                 hidden
               />
-              <button
+
+              {/* suggest already existing cvs-if user already have */}
+              {savedCvs.length > 0 ? (
+                <select
+                  className="pn-input"
+                  value={cvChoice}
+                  onChange={(e) => onCvChoiceChange(e.target.value)}
+                  disabled={docsLoading}
+                >
+                  <option value="">No CV — skip tailoring</option>
+                  {savedCvs.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.file_name}
+                    </option>
+                  ))}
+                  <option value={NEW_CV_OPTION}>Upload a new CV…</option>
+                </select>
+              ) : (
+                <button
                 className="pn-btn pn-btn--ghost"
                 onClick={() => fileInputRef.current?.click()}
               >
                 {cvFileName ? "Replace CV" : "Upload CV (PDF)"}
               </button>
+              )}
+              
               {cvFileName ? (
                 <span className="setup-upload__file">
                   {cvFileName}
+                  {pendingCvFile && <span className="setup-upload__pending"> (will upload on Continue)</span>}
                   <button
                     className="setup-upload__clear"
-                    onClick={() => setCvFileName("")}
+                    onClick={() => {
+                      setCvId(null);
+                      setPendingCvFile(null);
+                      setCvFileName("")
+                      setCvChoice("");
+
+                      if(fileInputRef.current)
+                        fileInputRef.current.value = "";
+                    }}
                     aria-label="Remove CV"
                   >
                     ✕
@@ -220,7 +353,7 @@ function InterviewSetup() {
 
             <div className="setup-jd">
               <label className="setup-jd__label" htmlFor="jd-select">
-                Job description
+                Job description *
               </label>
               <select
                 id="jd-select"
@@ -231,12 +364,27 @@ function InterviewSetup() {
                   if (e.target.value) setJdText("");
                 }}
               >
-                <option value="">Choose from our library…</option>
-                {JOB_DESCRIPTIONS.map((jd) => (
-                  <option key={jd.id} value={jd.id}>
-                    {jd.title} — {jd.company}
-                  </option>
-                ))}
+                <option value="">Choose from Existings ...</option>
+
+                //user's previous used
+                {savedJds.length > 0 && (
+                  <optgroup label="Your saved job descriptions">
+                    {savedJds.map((jd) => (
+                      <option key={jd.id} value={jd.id}>
+                        {jd.title} — {jd.company}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+
+                //from systemn's library
+                <optgroup label="Library">
+                  {jobDescriptions.map((jd) => (
+                    <option key={jd.id} value={jd.id}>
+                      {jd.title} — {jd.company}
+                    </option>
+                  ))}
+                </optgroup>
               </select>
 
               {selectedJd && (
@@ -253,9 +401,27 @@ function InterviewSetup() {
                     value={jdText}
                     onChange={(e) => setJdText(e.target.value)}
                   />
+
+                  {jdText.trim() && (
+                    <div className="setup-jd__custom-meta">
+                      <input
+                        className="pn-input"
+                        placeholder="Role title (e.g. Backend Engineer)"
+                        value={jdTitle}
+                        onChange={(e) => setJdTitle(e.target.value)}
+                      />
+                      <input
+                        className="pn-input"
+                        placeholder="Company Name"
+                        value={jdCompany}
+                        onChange={(e) => setJdCompany(e.target.value)}
+                      />
+                    </div>
+                  )}
                 </>
               )}
             </div>
+            {error && <p className="setup-error">{error}</p>}
           </section>
         )}
 
@@ -334,6 +500,7 @@ function InterviewSetup() {
               <button
                 className="pn-btn pn-btn--ghost"
                 onClick={() => setStep((s) => s - 1)}
+                disabled={persisting}
               >
                 Back
               </button>
@@ -341,9 +508,10 @@ function InterviewSetup() {
             {step < STEPS.length - 1 ? (
               <button
                 className="pn-btn pn-btn--primary"
-                onClick={() => setStep((s) => s + 1)}
+                onClick={goNext}
+                disabled={persisting}
               >
-                Continue
+                {persisting ? "Saving…" : "Continue"}
               </button>
             ) : (
               <button
