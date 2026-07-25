@@ -27,6 +27,7 @@ class SessionHistoryItem(BaseModel):
     id: str
     interview_type: str
     difficulty: Optional[str]
+    mode: Optional[str]
     overall_score: Optional[float]
     status: str
     created_at: datetime
