@@ -1,7 +1,6 @@
-/* ============================================================
+/* 
    PitchNode · Auth & Admin
-   Uses the shared design tokens from pitchnode.css
-   ============================================================ */
+ */
 
 .auth-splash {
   flex: 1;
@@ -381,4 +380,11 @@
     max-width: none;
     width: 100%;
   }
+}
+
+/* Landing nav auth cluster */
+.landing-nav__auth {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }

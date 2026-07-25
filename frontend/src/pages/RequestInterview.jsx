@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Logo from "../components/Logo";
-import { JOB_DESCRIPTIONS } from "../data/jobDescriptions";
+import useJobDescriptions from '../hooks/useJobDescription' 
+import { uploadCvApi } from "../api/documentsApi";
 import { createRequestApi } from "../api/requestApi";
 
 function RequestInterview() {
@@ -10,10 +11,11 @@ function RequestInterview() {
     const prefill = state?.prefill ?? {};
 
     const [jobTitle, setJobTitle] = useState("");
-    const [jdMode, setJdMode] = useState( prefill.jobDescriptionText ? "paste" : "library"); 
     const [jdId, setJdId] = useState(prefill.jobDescriptionId || "");
     const [jdText, setJdText] = useState(prefill.jobDescriptionText || "");
     const [cvFileName, setCvFileName] = useState(prefill.cvFileName || "");
+    const [cvId, setCvId] = useState(prefill.cvId || null);    
+    const [uploadingCv, setUploadingCv] = useState(false);
     const [preferredTime, setPreferredTime] = useState("");
     const [duration] = useState(prefill.duration || null);
     const [error, setError] = useState("");
@@ -24,12 +26,26 @@ function RequestInterview() {
         document.title = "Request an interview — PitchNode";
     }, []);
 
-    const selectedJd = JOB_DESCRIPTIONS.find((j) => j.id === jdId);
+    const { jobDescriptions } = useJobDescriptions();
+    const selectedJd = jobDescriptions.find((j) => j.id === jdId);
     const carried = prefill.cvFileName || prefill.jobDescriptionId || prefill.jobDescriptionText;
 
-    const onCv = (e) => {
+    const onCv = async (e) => {
         const file = e.target.files?.[0];
-        if (file) setCvFileName(file.name);
+        if (!file) 
+            return;
+
+        setCvFileName(file.name);
+        setUploadingCv(true);
+        try {
+            const res = await uploadCvApi(file);
+            setCvId(res?.id || null);
+        } catch {
+            setCvId(null);
+            setError("Error uploading CV");
+        } finally {
+            setUploadingCv(false);
+        }
     };
 
     const submit = async (e) => {
@@ -50,9 +66,10 @@ function RequestInterview() {
         try{
             await createRequestApi({
                 job_title: jobTitle.trim(),
-                jd_id: jdMode === "library" ? jdId : null,
-                job_description: jdMode === "paste" ? jdText.trim() : null,
+                jd_id: jdId || null,
+                job_description: jdText.trim() || null,
                 duration: duration || null,
+                cv_id: cvId || null,
                 cv_file_name: cvFileName || null,
                 preferred_time: preferredTime? new Date(preferredTime).toISOString(): null,
             });
@@ -100,7 +117,7 @@ function RequestInterview() {
             </section>
 
             <section className="setup-docs">
-                <p className="setup-group__label">Job description</p>
+                <p className="setup-group__label">Job description *</p>
 
                 <div className="setup-jd">
                     <select
@@ -112,7 +129,7 @@ function RequestInterview() {
                         }}
                         >
                         <option value="">Choose from our library…</option>
-                        {JOB_DESCRIPTIONS.map((jd) => (
+                        {jobDescriptions.map((jd) => (
                             <option key={jd.id} value={jd.id}>
                             {jd.title} — {jd.company}
                             </option>
@@ -153,7 +170,7 @@ function RequestInterview() {
                         className="pn-btn pn-btn--ghost"
                         onClick={() => fileRef.current?.click()}
                     >
-                        {cvFileName ? "Replace CV" : "Upload CV (PDF)"}
+                        {uploadingCv ? "Uploading…" : cvFileName ? "Replace CV" : "Upload CV (PDF)"}
                     </button>
                     {cvFileName ? (
                         <span className="setup-upload__file">

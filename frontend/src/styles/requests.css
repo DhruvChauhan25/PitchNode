@@ -2,6 +2,8 @@
    PitchNode · Interview requests (Room 2, user side)
    Uses the shared tokens from pitchnode.css
 */
+
+
 .auth-badge--accent {
   background: var(--accent-soft);
   color: var(--accent-deep);
@@ -74,6 +76,15 @@
   justify-content: space-between;
   gap: 16px;
   padding: 18px 20px;
+}
+
+.session-item--clickable {
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.session-item--clickable:hover {
+  border-color: var(--brand, #aa3bff);
 }
 
 .req-item__head {
