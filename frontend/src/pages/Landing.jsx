@@ -33,12 +33,22 @@ function Landing() {
             
 
             {(user?.role === "user") ? (
+              <>
               <button
                 className="pn-btn pn-btn--ghost"
                 onClick={() => navigate("/history")}
               >
                 My Sessions
               </button>
+
+              <button
+                className="pn-btn pn-btn--ghost"
+                onClick={() => navigate("/requests")}
+              >
+                My Requests
+              </button>
+              </>
+              
             ) : (
               <button
                 className="pn-btn pn-btn--ghost"

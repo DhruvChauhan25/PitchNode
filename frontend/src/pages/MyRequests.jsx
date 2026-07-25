@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Logo from "../components/Logo";
 import { JOB_DESCRIPTIONS } from "../data/jobDescriptions";
 import { listMyRequestsApi, cancelRequestApi } from "../api/requestApi";
+import "../styles/requests.css"
 
 const STATUS = {
   pending: { label: "Pending review", cls: "req-status--pending" },
@@ -112,7 +113,7 @@ function MyRequests() {
                             const s = STATUS[r.status] || STATUS.pending;
                             const canCancel = ["pending", "accepted"].includes(r.status);
                             return(
-                                <article className="pin-card req-item" key={r.id}>
+                                <article className="pn-card req-item" key={r.id}>
                                     <div className="req-item__main">
                                         <div className="req-item__head">
                                         <h3>{r.job_title}</h3>
