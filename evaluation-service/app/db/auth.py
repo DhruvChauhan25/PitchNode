@@ -39,6 +39,7 @@ def get_current_user(
                 SUPABASE_JWT_SECRET,
                 algorithms=["HS256"],
                 options={"verify_aud": False},
+                leeway=30,
             )
         else:
             client = _get_jwks_client()
@@ -48,6 +49,7 @@ def get_current_user(
                 signing_key.key,
                 algorithms=["ES256", "RS256"],
                 options={"verify_aud": False},
+                leeway=30,
             )
 
         return payload
