@@ -18,6 +18,7 @@ import ExpertDashboard from "./pages/ExpertDashboard.jsx";
 import PendingApproval from "./pages/PendingApproval.jsx";
 import RequestInterview from "./pages/RequestInterview.jsx";
 import MyRequests from "./pages/MyRequests.jsx";
+import SessionHistory from "./pages/SessionHistory.jsx"
 
 
 function App() {
@@ -97,6 +98,15 @@ function App() {
               element={
                 <ProtectedRoute>
                   <MyRequests />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/history"
+              element={
+                <ProtectedRoute>
+                  <SessionHistory />
                 </ProtectedRoute>
               }
             />

@@ -57,3 +57,11 @@ export const getResultsApi = (sessionId) =>
 // GET /sessions, 
 // user taken from JWT (no user_id param).
 export const getHistoryApi = () => authedClient.get(`/sessions`);
+
+export const generateQuestionsApi = ({ interviewType, cvId, jdId, count = 5 }) => {
+  const params = new URLSearchParams({ interview_type: toApiType(interviewType) });
+  if (cvId) params.set("cv_id", cvId);
+  if (jdId) params.set("jd_id", jdId);
+  if (count) params.set("count", String(count));
+  return authedClient.post(`/questions/generate?${params.toString()}`);
+};

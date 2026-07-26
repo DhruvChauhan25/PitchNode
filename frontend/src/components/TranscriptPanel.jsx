@@ -1,6 +1,6 @@
 import { useRef, useEffect } from "react";
 
-function TranscriptPanel({ lines = [], interim = "" , supported = true}) {
+function TranscriptPanel({ lines = [], interim = "" , supported = true, error = ""}) {
     const scrollRef = useRef(null);
 
     useEffect(() => {
@@ -21,6 +21,10 @@ function TranscriptPanel({ lines = [], interim = "" , supported = true}) {
           <span className="rm-transcript__waiting">
             Live transcription needs Chrome or Edge. Whisper-based
             transcription arrives in next version.
+          </span>
+        ) : error ? (
+          <span className="rm-transcript__waiting rm-transcript__error">
+            {error}
           </span>
         ) : lines.length === 0 && !interim ? (
           <span className="rm-transcript__waiting">

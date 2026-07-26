@@ -1,13 +1,14 @@
-import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
 
 import {
   startSessionApi,
+  evaluateAnswerApi,
   startQuestionsApi,
   nextQuestionApi,
   markAnsweredApi,
-  evaluateAnswerApi,
   completeSessionApi,
+  generateQuestionsApi,
 } from "../api/interviewApi";
 
 import VideoPanel from "../components/VideoPanel";
@@ -40,32 +41,45 @@ function AiInterviewRoom({ settings, questions }) {
 
   const [sessionId, setSessionId] = useState("");
   const [apiQuestion, setApiQuestion] = useState(null);
+  const [tailoredQuestions, setTailoredQuestions] = useState(null);
   const [allAnswered, setAllAnswered] = useState(false);
 
   const [qIndex, setQIndex] = useState(0);
   const [scores, setScores] = useState(null);
   const [feedback, setFeedback] = useState("");
+  const [isMockResult, setIsMockResult] = useState(false);
+
   const [answers, setAnswers] = useState([]);
   const [elapsed, setElapsed] = useState(0);
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
   const [ttsOn, setTtsOn] = useState(true);
   const [scoring, setScoring] = useState(false);
+  const [qSeconds, setQSeconds] = useState(0);
+  const MIN_SECONDS = 10;
 
   const questionStartRef = useRef(null);
   const sessionRequestedRef = useRef(false);
 
   const speech = useSpeechRecognition({ enabled: micOn });
 
-  const { supported, lines, interim, transcript } = speech;
+  const { supported, lines, interim, transcript, error: speechError } = speech;
   const resetTranscript = () => 
     typeof speech.reset === "function" ? speech.reset() : undefined;
 
   const apiMode = sessionId !== "" && sessionId !== "OFFLINE";
 
   /* Server-driven values when the backend is up; local bank otherwise */
+  const tailoredPrompt = 
+    tailoredQuestions && apiQuestion 
+    ? (tailoredQuestions[apiQuestion.question_number - 1]?.prompt ??
+      tailoredQuestions[apiQuestion.question_number - 1]?.text ??
+      null)
+    : null;
+    
   const currentQuestion =
-    apiMode && apiQuestion ? apiQuestion.prompt : questions[qIndex];
+    tailoredPrompt ??
+    (apiMode && apiQuestion ? apiQuestion.prompt : questions[qIndex]);
 
   const questionNumber =
     apiMode && apiQuestion ? apiQuestion.question_number : qIndex + 1;
@@ -90,17 +104,40 @@ function AiInterviewRoom({ settings, questions }) {
     
     (async () => {
       try {
-        const res = await startSessionApi(settings.type);
+        const res = await startSessionApi(settings.type, {
+          difficulty: settings.difficulty,
+          duration: settings.duration,
+          mode: settings.mode,
+          cvId: settings.cvId || null,
+          jdId: settings.jobDescriptionId || null,
+        });
         const id = res?.data?.id;
 
         if(!id) {
           throw new Error("Session response missing id");
         }
 
+        const hasDocs = Boolean(settings.cvId || settings.jobDescriptionId);
+        let tailored = null;
+        if (hasDocs) {
+          try {
+            const gen = await generateQuestionsApi({
+              interviewType: settings.type,
+              cvId: settings.cvId || null,
+              jdId: settings.jobDescriptionId || null,
+              count: settings?.duration/5 || 5,
+            });
+            if (Array.isArray(gen?.data) && gen.data.length) tailored = gen.data;
+          } catch (genErr) {
+            console.warn("Tailored generation unavailable — using standard flow.", genErr);
+          }
+        }
+
         await startQuestionsApi(id);
 
         const q = await nextQuestionApi(id);
         setApiQuestion(q?.data);
+        if (tailored) setTailoredQuestions(tailored);
         setSessionId(id);
       } catch (err) {
         console.warn(
@@ -140,6 +177,15 @@ function AiInterviewRoom({ settings, questions }) {
     questionStartRef.current = Date.now();
   }, [currentQuestion]);
 
+  //per-question timer
+  useEffect(() => {
+    const id = setInterval(() => {
+      const startedAt = questionStartRef.current ?? Date.now();
+      setQSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 500);
+    return () => clearInterval(id);
+  }, [currentQuestion]);
+
   const toggleMic = () => {
     if (!localStream) return;
     const next = !micOn;
@@ -171,23 +217,28 @@ function AiInterviewRoom({ settings, questions }) {
           questionText: currentQuestion,
           transcript,
         });
-        result = res?.data;
+        result = res?.data ? { ...res.data, isMock: false } : null;
+        if (!result) throw new Error("empty-response");
       } else {
         throw new Error("Offline mode or missing question ID — using mock evaluation");
       } 
     } catch(err) {
         console.warn("Live scoring unavailable — using local estimate.", err);
-        result = mockEvaluate({ 
-          questionIndex: index, 
-          answerSeconds,
-          transcriptLength: transcript.length,
-        });
+        result = {
+          ...mockEvaluate({
+            questionIndex: index,
+            answerSeconds,
+            transcriptLength: transcript.length,
+          }),
+          isMock: true,
+        };
     } finally {
       setScoring(false);  
     }
 
     setScores(result?.scores);
     setFeedback(result?.feedback);
+    setIsMockResult(Boolean(result?.isMock));
     setAnswers((prev) => [
       ...prev.filter((a) => a.index !== index),
       { 
@@ -203,6 +254,7 @@ function AiInterviewRoom({ settings, questions }) {
   const nextQuestion = async () => {
     setScores(null);
     setFeedback("");
+    setIsMockResult(false);
     resetTranscript();
 
     if (apiMode && apiQuestion) {
@@ -240,12 +292,23 @@ function AiInterviewRoom({ settings, questions }) {
         answers: [...answers].sort((a, b) => a.index - b.index),
         totalSeconds: elapsed,
         sessionId,
-        userId: getUserId(),
       },
     });
   };
 
   const answeredCurrent = scores != null;
+  const minTimeMet = qSeconds >= MIN_SECONDS;
+  const canSubmit = minTimeMet && !scoring;
+  const canGoNext = answeredCurrent && minTimeMet;
+
+  /* finish only allowed once every question is answered */
+  const answeredCount = answers.length;
+  const allAnsweredForFinish =
+    (apiMode && apiQuestion
+      ? answeredCount >= (apiQuestion.total_questions || 0)
+      : answeredCount >= questions.length) || allAnswered;
+
+  
   const badgeId =
     sessionId === "OFFLINE"
       ? "OFFLINE"
@@ -326,18 +389,35 @@ function AiInterviewRoom({ settings, questions }) {
             <button
               className="rm-btn rm-btn--primary"
               onClick={submitAnswer}
-              disabled={scoring }
+              disabled={!canSubmit }
+              title={
+                !minTimeMet
+                  ? `Take at least ${MIN_SECONDS}s on this question`
+                  : "Submit your answer"
+              }
             >
               {scoring
                 ? "Scoring…"
+                : !minTimeMet
+                ? `Submit in ${MIN_SECONDS - qSeconds}s`
                 : answeredCurrent
                 ? "Re-evaluate answer"
-                : "Submit answer"}
+                : "Submit answer"
+              }
             </button>
 
             {!isLast && !allAnswered && (
-              <button className="rm-btn rm-btn--outline" onClick={nextQuestion}>
-                Next question
+              <button 
+                className="rm-btn rm-btn--outline" 
+                onClick={nextQuestion}
+                disabled={!canGoNext}
+                title={
+                  !canGoNext
+                    ? "Submit your answer before moving on"
+                    : "Next question"
+                }
+              >
+                {canGoNext ? "Next question" : "Submit to continue"}
               </button>
             )}
 
@@ -360,9 +440,14 @@ function AiInterviewRoom({ settings, questions }) {
             lines={lines} 
             interim={interim} 
             supported={supported} 
+            error={speechError}
           />
 
-          <FeedbackPanel scores={scores} feedback={feedback} />
+          <FeedbackPanel 
+            scores={scores} 
+            feedback={feedback} 
+            isMock={isMockResult}
+            />
 
           <SessionInfo
             participantCount={1}

@@ -615,6 +615,26 @@ a {
   line-height: 1.55;
 }
 
+.setup-upload__pending {
+  color: var(--text-dim);
+  font-weight: 400;
+}
+
+.setup-jd__custom-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.setup-error {
+  font-size: 13px;
+  color: var(--danger, #d64545);
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: var(--danger-soft, rgba(214, 69, 69, 0.08));
+  border: 1px solid var(--danger, #d64545);
+}
+
 .setup-footer__actions {
   display: flex;
   gap: 10px;

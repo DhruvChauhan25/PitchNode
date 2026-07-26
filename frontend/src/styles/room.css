@@ -394,6 +394,11 @@
   font: 600 11.5px/1 var(--body, "Inter", sans-serif);
 }
 
+.rm-chip--mock {
+  background: #fdf3d8;
+  color: #8a6300;
+}
+
 .rm-question__meta {
   font: 600 12.5px/1 var(--body, "Inter", sans-serif);
   color: var(--rm-text-dim);
@@ -428,6 +433,10 @@
   gap: 10px;
   color: var(--rm-text-dim);
   font-size: 13.5px;
+}
+
+.rm-transcript__error {
+  color: #b3383c;
 }
 
 /* Metric bars */
@@ -583,6 +592,10 @@
   color: #b3383c;
 }
 
+.rm-leave-block {
+  margin: 0 clamp(16px, 3vw, 32px);
+}
+
 .rm-alert code {
   font: 700 14px/1 ui-monospace, "SF Mono", Consolas, monospace;
   letter-spacing: 0.1em;
@@ -690,4 +703,10 @@
   font-size: 12.5px;
   color: var(--rm-accent-deep);
   font-weight: 500;
+}
+
+/* Live room — finish action in the sidebar */
+.rm-finish {
+  width: 100%;
+  margin-top: 4px;
 }

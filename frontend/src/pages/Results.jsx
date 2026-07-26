@@ -59,7 +59,8 @@ function Results() {
     })();
     if (!state?.answers?.length) {
       if (!cancelled) { 
-        setData(normalizeState(state)); setLoading(false); 
+        setData(state?.answers); 
+        setLoading(false); 
       } else { 
         navigate("/setup", { replace: true }); 
       }
@@ -174,6 +175,11 @@ function Results() {
           >
             Practice again
           </button>
+
+          <button className="pn-btn pn-btn--ghost" onClick={() => navigate("/history")}>
+            View all sessions
+          </button>
+
           <button className="pn-btn pn-btn--ghost" onClick={() => navigate("/")}>
             Back to home
           </button>
