@@ -14,9 +14,11 @@ const createRoom = (req, res) => {
 
 const checkRoom = (req, res) => {
   const { roomId } = req.params;
+  const participants = rooms[roomId];
 
   res.json({
     exists: !!rooms[roomId],
+    participantCount: participants ? participants.length : 0,
   });
 };
 

@@ -5,11 +5,16 @@ const METRICS = [
   { key: "problemSolving", label: "Problem solving" },
 ];
 
-function FeedbackPanel({ scores = null, feedback = "" }) {
+function FeedbackPanel({ scores = null, feedback = "", isMock = false  }) {
   return (
     <div className="rm-card rm-anim rm-anim--3">
       <div className="rm-card__head">
         <h3 className="rm-card__title">AI feedback</h3>
+        {scores && isMock && (
+          <span className="rm-chip rm-chip--mock" title="Real scoring was unavailable — this is a local estimate, not a Groq evaluation.">
+            Estimated (offline)
+          </span>
+        )}
       </div>
 
       {METRICS.map(({ key, label }) => {

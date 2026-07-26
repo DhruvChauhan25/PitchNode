@@ -61,9 +61,7 @@ export const uploadCvApi = async (file) => {
   }
   const form = new FormData();
   form.append("file", file);
-  const { data } = await authedClient.post(`/documents/cv`, form, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
+  const { data } = await authedClient.post(`/documents/cv`, form);
   return data;
 };
 

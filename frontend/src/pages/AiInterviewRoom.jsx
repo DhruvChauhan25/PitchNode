@@ -47,6 +47,8 @@ function AiInterviewRoom({ settings, questions }) {
   const [qIndex, setQIndex] = useState(0);
   const [scores, setScores] = useState(null);
   const [feedback, setFeedback] = useState("");
+  const [isMockResult, setIsMockResult] = useState(false);
+
   const [answers, setAnswers] = useState([]);
   const [elapsed, setElapsed] = useState(0);
   const [micOn, setMicOn] = useState(true);
@@ -54,14 +56,14 @@ function AiInterviewRoom({ settings, questions }) {
   const [ttsOn, setTtsOn] = useState(true);
   const [scoring, setScoring] = useState(false);
   const [qSeconds, setQSeconds] = useState(0);
-  const MIN_SECONDS = 60;
+  const MIN_SECONDS = 10;
 
   const questionStartRef = useRef(null);
   const sessionRequestedRef = useRef(false);
 
   const speech = useSpeechRecognition({ enabled: micOn });
 
-  const { supported, lines, interim, transcript } = speech;
+  const { supported, lines, interim, transcript, error: speechError } = speech;
   const resetTranscript = () => 
     typeof speech.reset === "function" ? speech.reset() : undefined;
 
@@ -102,7 +104,13 @@ function AiInterviewRoom({ settings, questions }) {
     
     (async () => {
       try {
-        const res = await startSessionApi(settings.type);
+        const res = await startSessionApi(settings.type, {
+          difficulty: settings.difficulty,
+          duration: settings.duration,
+          mode: settings.mode,
+          cvId: settings.cvId || null,
+          jdId: settings.jobDescriptionId || null,
+        });
         const id = res?.data?.id;
 
         if(!id) {
@@ -117,7 +125,7 @@ function AiInterviewRoom({ settings, questions }) {
               interviewType: settings.type,
               cvId: settings.cvId || null,
               jdId: settings.jobDescriptionId || null,
-              count: 5,
+              count: settings?.duration/5 || 5,
             });
             if (Array.isArray(gen?.data) && gen.data.length) tailored = gen.data;
           } catch (genErr) {
@@ -209,23 +217,28 @@ function AiInterviewRoom({ settings, questions }) {
           questionText: currentQuestion,
           transcript,
         });
-        result = res?.data;
+        result = res?.data ? { ...res.data, isMock: false } : null;
+        if (!result) throw new Error("empty-response");
       } else {
         throw new Error("Offline mode or missing question ID — using mock evaluation");
       } 
     } catch(err) {
         console.warn("Live scoring unavailable — using local estimate.", err);
-        result = mockEvaluate({ 
-          questionIndex: index, 
-          answerSeconds,
-          transcriptLength: transcript.length,
-        });
+        result = {
+          ...mockEvaluate({
+            questionIndex: index,
+            answerSeconds,
+            transcriptLength: transcript.length,
+          }),
+          isMock: true,
+        };
     } finally {
       setScoring(false);  
     }
 
     setScores(result?.scores);
     setFeedback(result?.feedback);
+    setIsMockResult(Boolean(result?.isMock));
     setAnswers((prev) => [
       ...prev.filter((a) => a.index !== index),
       { 
@@ -241,6 +254,7 @@ function AiInterviewRoom({ settings, questions }) {
   const nextQuestion = async () => {
     setScores(null);
     setFeedback("");
+    setIsMockResult(false);
     resetTranscript();
 
     if (apiMode && apiQuestion) {
@@ -426,9 +440,14 @@ function AiInterviewRoom({ settings, questions }) {
             lines={lines} 
             interim={interim} 
             supported={supported} 
+            error={speechError}
           />
 
-          <FeedbackPanel scores={scores} feedback={feedback} />
+          <FeedbackPanel 
+            scores={scores} 
+            feedback={feedback} 
+            isMock={isMockResult}
+            />
 
           <SessionInfo
             participantCount={1}

@@ -4,10 +4,10 @@ const setupSockets = (io) => {
 
     io.on("connection", (socket) => {
 
-        console.log("A user connected:", socket.id);
+        // console.log("A user connected:", socket.id);
 
         socket.on("offer", ({ roomId, offer }) => {
-            console.log(`Received offer for room ${roomId} from ${socket.id}`);
+            // console.log(`Received offer for room ${roomId} from ${socket.id}`);
             socket.to(roomId).emit("offer", { 
                 offer,
                 senderId: socket.id
@@ -24,29 +24,51 @@ const setupSockets = (io) => {
         });
 
         socket.on("ice-candidate", ({ roomId, candidate }) => {
-            console.log(`Received ICE candidate for room ${roomId} from ${socket.id}`);
+            // console.log(`Received ICE candidate for room ${roomId} from ${socket.id}`);
             socket.to(roomId).emit("ice-candidate", { 
                 candidate,
                 senderId: socket.id
              });
         });
 
+        //backend relayy- complements the frontend listener
+        socket.on("question-changed", ({ roomId, questionIndex }) => {
+            socket.to(roomId).emit("question-changed", { 
+                questionIndex 
+            });
+        });
+
+        socket.on("session-info", ({ roomId, settings, questions, sessionId }) => {
+            socket.to(roomId).emit("session-info", { 
+                settings, 
+                questions, 
+                sessionId 
+            });
+        });
+
+        socket.on("interview-finished", ({ roomId, answers, sessionId }) => {
+            socket.to(roomId).emit("interview-finished", { 
+                answers, 
+                sessionId 
+            });
+        });
+
         socket.on("join-session", (roomId) => {
 
-            console.log(`Socket ${socket.id} is trying to join room: ${roomId}`);
+            // console.log(`Socket ${socket.id} is trying to join room: ${roomId}`);
 
             if (!rooms[roomId]) {
-                console.log(`Room ${roomId} does not exist. Cannot join.`);
+                // console.log(`Room ${roomId} does not exist. Cannot join.`);
                 return;
             }
 
-            console.log("Room exists. Current participants:", rooms[roomId]);
+            // console.log("Room exists. Current participants:", rooms[roomId]);
 
             if (!rooms[roomId].includes(socket.id)) {
                 rooms[roomId].push(socket.id);
             }
 
-            console.log("Participants after joining:", rooms[roomId]);
+            // console.log("Participants after joining:", rooms[roomId]);
 
             socket.join(roomId);
 
@@ -56,7 +78,7 @@ const setupSockets = (io) => {
             );
 
             if (rooms[roomId].length === 2) {
-                console.log("Emitting participant-joined");
+                // console.log("Emitting participant-joined");
                 io.to(roomId).emit("participant-joined");
             }
         });
@@ -75,12 +97,12 @@ const setupSockets = (io) => {
                 rooms[roomId].length
             );
 
-            console.log(
-                "Room:",
-                roomId,
-                "Participants:",
-                rooms[roomId].length
-            );
+            // console.log(
+            //     "Room:",
+            //     roomId,
+            //     "Participants:",
+            //     rooms[roomId].length
+            // );
         });
 
         socket.on("disconnect", () => {

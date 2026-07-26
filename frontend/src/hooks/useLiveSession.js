@@ -8,7 +8,7 @@ import {
     completeSessionApi
 } from "../api/interviewApi";
 
-export default function useLiveSession({settings, isHost, enabled = true}) {
+export default function useLiveSession({settings, isHost, enabled = true, sessionIdOverride = null}) {
     const [sessionId, setSessionId] = useState("");
     const [serverQuestions, setServerQuestions] = useState(null);
     const [scores, setScores] = useState(null);
@@ -19,6 +19,12 @@ export default function useLiveSession({settings, isHost, enabled = true}) {
     const startedRef = useRef(false);
 
     const apiMode = sessionId != "" && sessionId !== "OFFLINE";
+
+    useEffect(() => {
+        if (isHost || !sessionIdOverride || startedRef.current) return;
+        startedRef.current = true;
+        setSessionId(sessionIdOverride);
+    }, [isHost, sessionIdOverride]);
 
     useEffect(() => {
         if(!enabled || !isHost || startedRef.current)
@@ -84,17 +90,26 @@ export default function useLiveSession({settings, isHost, enabled = true}) {
                     questionText,
                     transcript,
                 });
-                result = res?.data;
+                result = res?.data ? { ...res.data, isMock: false } : null;
+                if(!result) throw new Error("empty-response")
             } else {
-                throw new Error("offline-or-empty")
+                throw new Error(
+                    !apiMode ? "no-live-session" : "empty-transcript"
+                )
             }
-            } catch {    
+            } catch (err){    
+                console.warn(
+                    `Real evaluation unavailable (${err.message}) — using mock scoring.`
+                );
                 result = mockEvaluate
-                ? mockEvaluate({
-                    questionIndex,
-                    answerSeconds: 10,
-                    transcriptLength: (transcript || "").length,
-                    })
+                ? {
+                    ...mockEvaluate({
+                        questionIndex,
+                        answerSeconds: 10,
+                        transcriptLength: (transcript || "").length,
+                    }),
+                    isMock: true,
+                  }
                 : null;
             } finally {
                 setScoring(false);
@@ -130,7 +145,7 @@ export default function useLiveSession({settings, isHost, enabled = true}) {
             return null;
 
         try{
-            const res = await completeSession(sessionId);
+            const res = await completeSessionApi(sessionId);
             return res?.data ?? null;
         } catch {
             return null;

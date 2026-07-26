@@ -82,7 +82,7 @@ function Landing() {
             <button
               className="pn-btn pn-btn--primary"
               onClick={() => navigate("/register")}
-              disabled = {!user}
+              disabled = {user}
             >
               Sign up
             </button>
@@ -112,7 +112,7 @@ function Landing() {
           </button>
           <button
             className="pn-btn pn-btn--ghost"
-            onClick={() => navigate("/room")}
+            onClick={() => navigate("/room?join=1")}
           >
             Join with a code
           </button>

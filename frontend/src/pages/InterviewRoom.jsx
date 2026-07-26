@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useSyncExternalStore } from "react";
 import { io } from "socket.io-client";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { createRoomApi, checkRoomApi } from "../api/sessionApi";
 import VideoPanel from "../components/VideoPanel";
@@ -20,11 +20,15 @@ import {
   CheckIcon,
 } from "../components/RoomIcons";
 import { getQuestions } from "../data/questionBank";
+import useLiveSession from "../hooks/useLiveSession";
+import { mockEvaluate } from "../utils/mockEvaluation";
 import AiInterviewRoom from "./AiInterviewRoom";
 import useLocalMedia from "../hooks/useLocalMedia";
 import useSpeechRecognition from "../hooks/useSpeechRecognition";
 import usePeerConnection from "../hooks/usePeerConnection";
 import "../styles/room.css";
+
+const BASE = import.meta.env.VITE_API_BASE_URL;
 
 function formatElapsed(totalSeconds) {
   const m = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
@@ -40,15 +44,35 @@ const DEFAULT_SETTINGS = {
 };
 
 function LiveInterviewRoom({ settings, questions }) {
+  const navigate = useNavigate();
+
+  const cameFromLinkRef = useRef(
+    Boolean(new URLSearchParams(window.location.search).get("roomId")),
+  );
+  const cameFromLink = cameFromLinkRef.current;
+
+  const wantsManualJoinRef = useRef(
+    new URLSearchParams(window.location.search).get("join") === "1",
+  );
+  const wantsManualJoin = wantsManualJoinRef.current;
+
   const [createdRoomId, setCreatedRoomId] = useState("");
   const [roomId, setRoomId] = useState(
-    () => new URLSearchParams(window.location.search).get("roomId") || ""
+    () => new URLSearchParams(window.location.search).get("roomId") || "",
   );
   const [participantCount, setParticipantCount] = useState(0);
   const [joined, setJoined] = useState(false);
   const [isHost, setIsHost] = useState(false);
   const [participantJoinedSignal, setParticipantJoinedSignal] = useState(0);
   const [error, setError] = useState("");
+
+  //lobby state
+  const [linkParticipantCount, setLinkParticipantCount] = useState(0);
+  const [roomCheckError, setRoomCheckError] = useState("");
+  const [blockedLeaveMsg, setBlockedLeaveMsg] = useState("");
+
+  const [peerLeftNotice, setPeerLeftNotice] = useState(false);
+  const prevParticipantCountRef = useRef(0);
 
   /* UI-only state — no signaling impact */
   const [elapsed, setElapsed] = useState(0);
@@ -59,22 +83,67 @@ function LiveInterviewRoom({ settings, questions }) {
 
   //question navigation
   const [qIndex, setQIndex] = useState(0);
-  const isFriendMode = settings.mode === "friend";
+
+  //host broadcast its real settings + question list
+  const [remoteSettings, setRemoteSettings] = useState(null);
+  const [remoteQuestions, setRemoteQuestions] = useState(null);
+  const [remoteSessionId, setRemoteSessionId] = useState(null);
+  const effectiveSettings =
+    !isHost && remoteSettings ? remoteSettings : settings;
+
+  const isFriendMode = effectiveSettings.mode === "friend";
 
   //role split, creator (host) vs joiner (interviewer)
   const isInterviewer = isFriendMode ? !isHost : true;
+
+  const canFinish = !isHost;
 
   //participant labels
   const localLabel = isHost ? "Interviewee" : "Peer";
   const remoteLabel = isHost ? "Peer" : "Interviewee";
 
+  //n=backend session
+  const {
+    sessionId,
+    serverQuestions,
+    scores,
+    feedback,
+    scoring,
+    answers,
+    evaluateAnswer,
+    clearScores,
+    completeSession,
+  } = useLiveSession({
+    settings,
+    isHost,
+    sessionIdOverride: !isHost ? remoteSessionId : null,
+  });
+
+  const activeQuestions =
+    serverQuestions && serverQuestions.length
+      ? serverQuestions
+      : !isHost && remoteQuestions && remoteQuestions.length
+        ? remoteQuestions
+        : questions;
+
+  const [displayScores, setDisplayScores] = useState(null);
+  const [displayFeedback, setDisplayFeedback] = useState("");
+  const [displayIsMock, setDisplayIsMock] = useState(false);
+
   const screenTrackRef = useRef(null);
 
-  const { supported, lines, interim } = useSpeechRecognition({ enabled: joined && micOn,});
+  const {
+    supported,
+    lines,
+    interim,
+    transcript,
+    error: speechError,
+    reset: resetTranscript,
+  } = useSpeechRecognition({ enabled: joined && micOn });
 
   const socketRef = useRef(null);
   if (!socketRef.current) {
-    socketRef.current = io("http://localhost:5001");
+    socketRef.current = io(BASE);
   }
   const socket = socketRef.current;
 
@@ -87,6 +156,15 @@ function LiveInterviewRoom({ settings, questions }) {
 
   useEffect(() => {
     socket.on("participant-count", (count) => {
+      if (
+        isHost &&
+        joined &&
+        prevParticipantCountRef.current >= 2 &&
+        count < 2
+      ) {
+        setPeerLeftNotice(true);
+      }
+      prevParticipantCountRef.current = count;
       setParticipantCount(count);
     });
 
@@ -95,12 +173,82 @@ function LiveInterviewRoom({ settings, questions }) {
       setParticipantJoinedSignal((prev) => prev + 1);
     });
 
+    //frined-mode, interviewer drives navigation and emits
+    socket.off("question-changed");
+    socket.on("question-changed", ({ questionIndex }) => {
+      if (typeof questionIndex === "number") {
+        setQIndex(questionIndex);
+      }
+    });
+
+    //host broadcast its real settings + question list
+    socket.off("session-info");
+    socket.on(
+      "session-info",
+      ({
+        settings: hostSettings,
+        questions: hostQuestions,
+        sessionId: hostSessionId,
+      }) => {
+        if (isHost) return;
+        if (hostSettings) setRemoteSettings(hostSettings);
+        if (Array.isArray(hostQuestions) && hostQuestions.length)
+          setRemoteQuestions(hostQuestions);
+        if (hostSessionId) setRemoteSessionId(hostSessionId);
+      },
+    );
+
+    //broadcast evaluatye answere
+    socket.off("answer-evaluated");
+    socket.on("answer-evaluated", ({ result }) => {
+      if (!result) return;
+      setDisplayScores(result.scores ?? null);
+      setDisplayFeedback(result.feedback ?? "");
+      setDisplayIsMock(Boolean(result.isMock));
+    });
+
+    socket.off("interview-finished");
+    socket.on(
+      "interview-finished",
+      ({ answers: finalAnswers, sessionId: finalSessionId }) => {
+        navigate("/results", {
+          state: {
+            settings: effectiveSettings,
+            answers: finalAnswers ?? [],
+            sessionId: finalSessionId,
+          },
+        });
+      },
+    );
+
     return () => {
       socket.off("participant-count");
       socket.off("participant-joined");
       socket.off("question-changed");
+      socket.off("session-info");
+      socket.off("answer-evaluated");
+      socket.off("interview-finished");
     };
-  }, [socket]);
+  }, [socket, isHost, navigate, effectiveSettings]);
+
+  useEffect(() => {
+    if (!isHost || !roomId || participantJoinedSignal === 0) return;
+    socket.emit("session-info", {
+      roomId,
+      settings,
+      questions: activeQuestions,
+      sessionId,
+    });
+  }, [
+    isHost,
+    roomId,
+    participantJoinedSignal,
+    serverQuestions,
+    questions,
+    socket,
+    settings,
+    sessionId,
+  ]);
 
   useEffect(() => {
     if (!isHost || participantJoinedSignal === 0 || !localStream) return;
@@ -132,7 +280,7 @@ function LiveInterviewRoom({ settings, questions }) {
         socket.off("disconnect", notify);
       };
     },
-    () => socket.connected
+    () => socket.connected,
   );
 
   /* Session timer — runs while joined */
@@ -159,6 +307,41 @@ function LiveInterviewRoom({ settings, questions }) {
       setError("Could not create a room. Is the session service running?");
     }
   };
+
+  const autoCreateStartedRef = useRef(false);
+  useEffect(() => {
+    if (
+      cameFromLink ||
+      wantsManualJoin ||
+      joined ||
+      autoCreateStartedRef.current
+    )
+      return;
+    autoCreateStartedRef.current = true;
+    createRoom();
+  }, [cameFromLink, joined]);
+
+  useEffect(() => {
+    if (!cameFromLink || wantsManualJoin || joined || !roomId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await checkRoomApi(roomId);
+        if (cancelled) return;
+        if (!res.data.exists) {
+          setRoomCheckError("This room doesn't exist or has ended.");
+        } else {
+          setLinkParticipantCount(res.data.participantCount ?? 0);
+        }
+      } catch {
+        if (!cancelled)
+          setRoomCheckError("Could not reach the session service.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [cameFromLink, roomId, joined]);
 
   const joinRoom = async () => {
     if (!roomId) {
@@ -194,17 +377,29 @@ function LiveInterviewRoom({ settings, questions }) {
 
     socket.emit("leave-session", roomId);
 
+    /* Re-enable local tracks so the next session starts clean */
+    peerConnectionRef.current?.close();
+    localStream?.getAudioTracks().forEach((t) => t.stop());
+    localStream?.getVideoTracks().forEach((t) => t.stop());
+
     setJoined(false);
     setIsHost(false);
     setCreatedRoomId("");
     setRoomId("");
     setParticipantCount(0);
+    setMicOn(false);
+    setCamOn(false);
 
-    /* Re-enable local tracks so the next session starts clean */
-    localStream?.getAudioTracks().forEach((t) => (t.enabled = true));
-    localStream?.getVideoTracks().forEach((t) => (t.enabled = true));
-    setMicOn(true);
-    setCamOn(true);
+    navigate("/");
+  };
+
+  const handleLeaveClick = () => {
+    if (isHost && !peerLeftNotice) {
+      setBlockedLeaveMsg("You can't leave while the interview is in progress.");
+      setTimeout(() => setBlockedLeaveMsg(""), 4000);
+      return;
+    }
+    leaveRoom();
   };
 
   const toggleMic = () => {
@@ -266,15 +461,76 @@ function LiveInterviewRoom({ settings, questions }) {
     }
   };
 
-  const goToQuestion = (next) => { 
-    const clamped = Math.max(0, Math.min(next, questions.length - 1));
+  const copyRoomCode = async () => {
+    if (!roomId) return;
+    const code = `${roomId}`;
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Could not copy code:", err);
+    }
+  };
+
+  const goToQuestion = (next) => {
+    const clamped = Math.max(0, Math.min(next, activeQuestions.length - 1));
     setQIndex(clamped);
 
-    //Sync to the peer. No-op until the session-service relays it.
-    if(rooomId) socket.emit("question-changed", { roomId, questionIndex: clamped });
-  }
-  const nextQuestion = () => goToQuestion(qIndex + 1);
-  const prevQuestion = () => goToQuestion(qIndex - 1);
+    //Sync to the peer via session-service relay
+    if (roomId)
+      socket.emit("question-changed", { roomId, questionIndex: clamped });
+  };
+
+  const nextQuestion = async () => {
+    const fullTranscript = [transcript, interim]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+    const result = await evaluateAnswer({
+      questionIndex: qIndex,
+      questionText: activeQuestions[qIndex],
+      transcript: fullTranscript,
+      mockEvaluate,
+    });
+
+    if (result) {
+      setDisplayScores(result.scores ?? null);
+      setDisplayFeedback(result.feedback ?? "");
+      setDisplayIsMock(Boolean(result.isMock));
+      if (roomId)
+        socket.emit("answer-evaluated", {
+          roomId,
+          questionIndex: qIndex,
+          result,
+        });
+    }
+    resetTranscript();
+    goToQuestion(qIndex + 1);
+  };
+
+  const prevQuestion = () => {
+    clearScores();
+    setDisplayScores(null);
+    setDisplayFeedback("");
+    setDisplayIsMock(false);
+    resetTranscript();
+    goToQuestion(qIndex - 1);
+  };
+
+  const finishAsInterviewer = async () => {
+    await completeSession();
+    const sortedAnswers = [...answers].sort((a, b) => a.index - b.index);
+    if (roomId) {
+      socket.emit("interview-finished", {
+        roomId,
+        answers: sortedAnswers,
+        sessionId,
+      });
+    }
+    navigate("/");
+  };
 
   const live = connected && participantCount >= 2;
 
@@ -291,13 +547,20 @@ function LiveInterviewRoom({ settings, questions }) {
               !connected
                 ? "rm-badge--off"
                 : live
-                ? "rm-badge--live"
-                : "rm-badge--wait"
+                  ? "rm-badge--live"
+                  : "rm-badge--wait"
             }`}
           >
             <span className={`rm-dot${live ? " rm-dot--pulse" : ""}`} />
             {!connected ? "Disconnected" : live ? "Live" : "Waiting"}
           </span>
+          { joined &&
+            <button className="rm-btn rm-btn--outline" onClick={copyRoomCode}>
+              {copied ? <CheckIcon /> : <CopyIcon />}
+              {copied ? "Copied" : "Copy Code"}
+            </button>
+          }
+           
         </div>
 
         <div className="room-header__group">
@@ -306,31 +569,70 @@ function LiveInterviewRoom({ settings, questions }) {
           </span>
           {joined && <span className="rm-timer">{formatElapsed(elapsed)}</span>}
           {joined && (
-            <button className="rm-btn rm-btn--outline" onClick={copyRoomLink}>
-              {copied ? <CheckIcon /> : <CopyIcon />}
-              {copied ? "Copied" : "Copy link"}
-            </button>
+            <>
+              <button className="rm-btn rm-btn--outline" onClick={copyRoomLink}>
+                {copied ? <CheckIcon /> : <CopyIcon />}
+                {copied ? "Copied" : "Copy link"}
+              </button>
+            </>
           )}
           {joined && (
-            <button className="rm-btn rm-btn--danger" onClick={leaveRoom}>
-              Finish interview
+            <button
+              className="rm-btn rm-btn--danger"
+              onClick={handleLeaveClick}
+            >
+              Leave
             </button>
           )}
         </div>
       </header>
 
+      {joined && blockedLeaveMsg && (
+        <div className="rm-alert rm-alert--err rm-leave-block" role="alert">
+          {blockedLeaveMsg}
+        </div>
+      )}
+
+      {joined && peerLeftNotice && (
+        <div className="rm-alert rm-alert--err rm-leave-block" role="alert">
+          Your interviewer left the session without finishing — you're free to
+          leave.
+          <button className="rm-btn rm-btn--outline" onClick={leaveRoom}>
+            Leave
+          </button>
+        </div>
+      )}
+
       {!joined ? (
         <main className="room-lobby">
-          <RoomControls
-            roomId={roomId}
-            setRoomId={setRoomId}
-            createdRoomId={createdRoomId}
-            error={error}
-            createRoom={createRoom}
-            joinRoom={joinRoom}
-            copyRoomLink={copyRoomLink}
-            copied={copied}
-          />
+          {cameFromLink ? (
+            roomCheckError ? (
+              <RoomControls
+                variant="error"
+                error={roomCheckError}
+                goHome={() => navigate("/")}
+              />
+            ) : (
+              <RoomControls
+                variant="join-link"
+                participantCount={linkParticipantCount}
+                error={error}
+                joinRoom={joinRoom}
+                goHome={() => navigate("/")}
+              />
+            )
+          ) : wantsManualJoin ? (
+            <RoomControls
+              variant="manual-join"
+              roomId={roomId}
+              setRoomId={setRoomId}
+              error={error}
+              joinRoom={joinRoom}
+              goHome={() => navigate("/")}
+            />
+          ) : (
+            <RoomControls variant="creating" error={error} />
+          )}
         </main>
       ) : (
         <main className="room-main">
@@ -387,7 +689,7 @@ function LiveInterviewRoom({ settings, questions }) {
 
               <button
                 className="rm-ctl rm-ctl--leave"
-                onClick={leaveRoom}
+                onClick={handleLeaveClick}
                 aria-label="Leave interview"
               >
                 <LeaveIcon />
@@ -397,46 +699,83 @@ function LiveInterviewRoom({ settings, questions }) {
           </section>
 
           <aside className="room-side">
-            <QuestionPanel
-              number={qIndex + 1}
-              total={questions.length}
-              type={settings.type}
-              question={questions[qIndex]}
-              prompter={isFriendMode && isInterviewer}
-            />
-            {isInterviewer && (
-              <div className="rm-qnav">
-                <button
-                  className="rm-btn rm-btn--outline"
-                  onClick={prevQuestion}
-                  disabled={qIndex === 0}
-                >
-                  Previous
-                </button>
-                <span className="rm-qnav__count">
-                  {qIndex + 1} / {questions.length}
-                </span>
-                <button
-                  className="rm-btn rm-btn--primary"
-                  onClick={nextQuestion}
-                  disabled={qIndex === questions.length - 1}
-                >
-                  Next question
-                </button>
+            {isInterviewer ? (
+              <>
+                <QuestionPanel
+                  number={qIndex + 1}
+                  total={activeQuestions.length}
+                  type={effectiveSettings.type}
+                  question={activeQuestions[qIndex]}
+                  prompter={isFriendMode}
+                />
+
+                <div className="rm-qnav">
+                  <button
+                    className="rm-btn rm-btn--outline"
+                    onClick={prevQuestion}
+                    disabled={qIndex === 0 || scoring}
+                  >
+                    Previous
+                  </button>
+                  <span className="rm-qnav__count">
+                    {qIndex + 1} / {activeQuestions.length}
+                  </span>
+                  <button
+                    className="rm-btn rm-btn--primary"
+                    onClick={nextQuestion}
+                    disabled={qIndex === activeQuestions.length - 1}
+                  >
+                    {scoring ? "Scoring..." : "Next question"}
+                  </button>
+                </div>
+
+                <TranscriptPanel
+                  lines={lines}
+                  interim={interim}
+                  supported={supported}
+                  error={speechError}
+                />
+              </>
+            ) : (
+              <div className="rm-card rm-anim">
+                <div className="rm-card__head">
+                  <h3 className="rm-card__title">Your interview</h3>
+                  <span className="rm-chip">{effectiveSettings.type}</span>
+                </div>
+                <p className="rm-card__note">
+                  Listen to your interviewer and answer out loud. Your feedback
+                  appears below as the interview moves along.
+                </p>
               </div>
             )}
-            <TranscriptPanel
-              lines={lines}
-              interim={interim}
-              supported={supported}
+
+            <FeedbackPanel
+              scores={displayScores}
+              feedback={displayFeedback}
+              isMock={displayIsMock}
             />
-            <FeedbackPanel />
+
+            {canFinish && (
+              <button
+                className="rm-btn rm-btn--primary rm-finish"
+                onClick={finishAsInterviewer}
+                disabled={answers.length === 0}
+                title={
+                  answers.length === 0
+                    ? "Answer at least one question first"
+                    : "Finish and see results"
+                }
+              >
+                Finish Interview
+              </button>
+            )}
+
             <SessionInfo
               participantCount={participantCount}
               roomId={roomId}
-              mode={settings.mode}
-              type={settings.type}
-              duration={`${settings.duration} min`}
+              mode={effectiveSettings.mode}
+              type={effectiveSettings.type}
+              duration={`${effectiveSettings.duration} min`}
               connected={connected}
             />
           </aside>

@@ -21,7 +21,7 @@ export default function useUserDocuments(){
   }, []);
 
   useEffect(() => {
-    let cancelled = true;
+    let cancelled = false;
     (async () => {
         await reload();
         if(cancelled)
