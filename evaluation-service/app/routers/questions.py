@@ -6,12 +6,10 @@ from app.services.question_gen import generate_questions
 
 router = APIRouter(prefix="/questions", tags=["questions"])
 
-QUESTIONS_PER_SESSION = 5
-
-
 @router.post("/generate", response_model=list[dict])
 def generate_tailored_questions(
     interview_type: str,
+    difficulty: str ="medium",
     cv_id: str | None = None,
     jd_id: str | None = None,
     count: int = 5,
@@ -37,6 +35,7 @@ def generate_tailored_questions(
     try:
         questions = generate_questions(
             interview_type=interview_type,
+            difficulty=difficulty,
             cv_text=cv_text,
             jd_text=jd_text,
             count=count,
@@ -61,6 +60,10 @@ def start_session_questions(session_id: str, current_user: dict = Depends(get_cu
         raise HTTPException(status_code=404, detail="Session not found")
 
     interview_type = session["interview_type"]
+    duration = session["duration"]
+
+    # Approx. 6 minutes per question
+    question_count = max(3, round(duration / 6))
 
     existing = supabase.table("session_questions").select("id").eq("session_id", session_id).execute()
     if existing.data:
@@ -71,7 +74,7 @@ def start_session_questions(session_id: str, current_user: dict = Depends(get_cu
         .select("id, order")
         .eq("interview_type", interview_type)
         .order("order")
-        .limit(QUESTIONS_PER_SESSION)
+        .limit(question_count)
         .execute()
     )
 
@@ -121,7 +124,7 @@ def get_next_question(session_id: str, current_user: dict = Depends(get_current_
         .eq("session_id", session_id)
         .execute()
     )
-    total = total_result.count or QUESTIONS_PER_SESSION
+    total = total_result.count 
 
     return {
         "id": question["id"],

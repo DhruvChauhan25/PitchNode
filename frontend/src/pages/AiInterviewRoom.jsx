@@ -122,11 +122,13 @@ function AiInterviewRoom({ settings, questions }) {
         if (hasDocs) {
           try {
             const gen = await generateQuestionsApi({
-              interviewType: settings.type,
-              cvId: settings.cvId || null,
-              jdId: settings.jobDescriptionId || null,
-              count: settings?.duration/5 || 5,
-            });
+                interviewType: settings.type,
+                difficulty: settings.difficulty || "medium",
+                cvId: settings.cvId || null,
+                jdId: settings.jobDescriptionId || null,
+                duration: settings.duration || 15,
+            })
+            
             if (Array.isArray(gen?.data) && gen.data.length) tailored = gen.data;
           } catch (genErr) {
             console.warn("Tailored generation unavailable — using standard flow.", genErr);

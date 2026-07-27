@@ -20,6 +20,7 @@ def get_groq() -> Groq:
 
 def generate_questions(
     interview_type: str,
+    difficulty: str = "medium",
     cv_text: str | None = None,
     jd_text: str | None = None,
     count: int = 5,
@@ -45,16 +46,35 @@ def generate_questions(
         "hr": "Focus on career goals, motivation, culture fit, and professionalism relevant to the role and company.",
     }
 
-    prompt = f"""You are an expert interviewer preparing {count} {interview_type.upper()} interview questions.
+    difficulty_guidance = {
+    "easy": (
+        "Questions should test fundamental concepts, basic knowledge, "
+        "and simple real-world scenarios suitable for beginners."
+    ),
+    "medium": (
+        "Questions should require practical experience, analytical thinking, "
+        "and moderate problem-solving."
+    ),
+    "hard": (
+        "Questions should challenge experienced candidates with advanced concepts, "
+        "edge cases, system design, and complex problem-solving."
+    ),
+}
+
+    prompt = f"""You are an expert interviewer preparing {count} {difficulty.upper()} {interview_type.upper()} interview questions.
 
 {context}
 
 Interview type guidance: {type_guidance.get(interview_type, '')}
 
+Difficulty guidance: {difficulty_guidance.get(difficulty, difficulty_guidance["medium"])}
+
 Generate exactly {count} questions that are:
 - Specific to the candidate's background and/or the job role (when context is provided)
 - Appropriate for a spoken verbal answer (no code writing required)
-- Varied in difficulty and angle
+- Match the requested difficulty level
+- Varied in topic and wording
+- Avoid duplicate or very similar questions
 
 Respond ONLY with valid JSON array, no preamble, no markdown:
 [

@@ -49,9 +49,10 @@ export default function useLiveSession({settings, isHost, enabled = true, sessio
                     try{
                         const gen = await generateQuestionsApi({
                             interviewType: settings.type,
+                            difficulty: settings.difficulty || "medium",
                             cvId: settings.cvId || null,
                             jdId: settings.jobDescriptionId || null,
-                            count: settings.duration/3 || 5,
+                            duration: settings.duration || 15,
                         })
 
                         if(Array.isArray(gen?.data) && gen.data.length) {

@@ -11,8 +11,9 @@ def evaluate_answer(payload: EvaluationRequest):
     """
     Scores one spoken answer using Groq + rubric methodology.
     Steps:
-      1. Fetch rubric dimensions for this session's interview_type
-      2. Send transcript + rubric to Groq → get dimension scores + feedback
+      1. Retrieve the interview type and difficulty from the session.
+      2. Fetch rubric dimensions for this session's interview_type
+      3. Send transcript + rubric to Groq → get dimension scores + feedback
       3. Persist evaluation row to DB
       4. Return the fixed 4-key scores shape the frontend expects
     """
@@ -21,14 +22,16 @@ def evaluate_answer(payload: EvaluationRequest):
     # 1. Get interview type from session
     session_result = (
         supabase.table("sessions")
-        .select("interview_type")
+        .select("interview_type, difficulty")
         .eq("id", payload.session_id)
         .execute()
     )
     if not session_result.data:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    interview_type = session_result.data[0]["interview_type"]
+    session = session_result.data[0]
+    interview_type = session["interview_type"]
+    difficulty = session.get("difficulty", "medium")
 
     # 2. Fetch rubric dimensions for this interview type
     rubric_result = (
@@ -47,6 +50,7 @@ def evaluate_answer(payload: EvaluationRequest):
             question_text=payload.question_text,
             transcript=payload.transcript,
             interview_type=interview_type,
+            difficulty=difficulty,
             rubric_dimensions=rubric_result.data,
         )
     except Exception as e:
