@@ -1,3 +1,5 @@
+import uuid as uuid_lib
+
 from fastapi import APIRouter, HTTPException, Depends
 from app.models.question import QuestionResponse
 from app.db.supabase_client import get_supabase
@@ -28,9 +30,11 @@ def generate_tailored_questions(
             cv_text = cv_result.data[0].get("cv_text")
 
     if jd_id:
-        jd_result = supabase.table("job_descriptions").select("text").eq("id", jd_id).execute()
+        jd_result = supabase.table("job_descriptions").select("text, user_id").eq("id", jd_id).execute()
         if jd_result.data:
-            jd_text = jd_result.data[0].get("text")
+            jd_row = jd_result.data[0]
+            if jd_row.get("user_id") in (None, user_id):
+                jd_text = jd_result.data[0].get("text")
 
     try:
         questions = generate_questions(
@@ -136,10 +140,51 @@ def get_next_question(session_id: str, current_user: dict = Depends(get_current_
         "is_last": question_number == total,
     }
 
+@router.get("/{session_id}/all", response_model=list[dict])
+def get_all_session_questions(session_id: str, current_user: dict = Depends(get_current_user)):
+    """
+    Returns every question queued for this session, in order, each with its
+    real question_id (UUID). Room 1 fetches one at a time via /next because
+    it only ever moves forward, marking-answered to advance. Room 2/3
+    supports going backward (Previous) and manages its own local index
+    client-side, so it needs the whole sequence — with real ids — up front
+    instead of one at a time.
+    """
+    supabase = get_supabase()
+    user_id = current_user["sub"]
+
+    session_result = supabase.table("sessions").select("user_id").eq("id", session_id).execute()
+    if not session_result.data or session_result.data[0]["user_id"] != user_id:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    sq_result = (
+        supabase.table("session_questions")
+        .select("question_order, questions(id, prompt)")
+        .eq("session_id", session_id)
+        .order("question_order")
+        .execute()
+    )
+
+    return [
+        {
+            "id": row["questions"]["id"],
+            "prompt": row["questions"]["prompt"],
+            "question_number": row["question_order"],
+        }
+        for row in sq_result.data
+        if row.get("questions")
+    ]
+
 
 @router.post("/{session_id}/answered/{question_id}", response_model=dict)
 def mark_answered(session_id: str, question_id: str, current_user: dict = Depends(get_current_user)):
     supabase = get_supabase()
+
+    try:
+        uuid_lib.UUID(question_id)
+    except (ValueError, AttributeError, TypeError):
+        return {"message": "No matching question row (non-UUID id) — skipped", "question_id": question_id}
+                
     result = (
         supabase.table("session_questions")
         .update({"answered": True})

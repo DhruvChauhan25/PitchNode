@@ -126,6 +126,12 @@ function LiveInterviewRoom({ settings, questions }) {
         ? remoteQuestions
         : questions;
 
+  const currentQ = activeQuestions[qIndex];
+  const currentQuestionText =
+    typeof currentQ === "string" ? currentQ : (currentQ?.prompt ?? "");
+  const currentQuestionId =
+    typeof currentQ === "string" ? null : (currentQ?.id ?? null);
+
   const [displayScores, setDisplayScores] = useState(null);
   const [displayFeedback, setDisplayFeedback] = useState("");
   const [displayIsMock, setDisplayIsMock] = useState(false);
@@ -210,7 +216,11 @@ function LiveInterviewRoom({ settings, questions }) {
     socket.off("interview-finished");
     socket.on(
       "interview-finished",
-      ({ answers: finalAnswers, sessionId: finalSessionId }) => {
+      async ({ answers: finalAnswers, sessionId: finalSessionId }) => {
+        //only the host actually receive this
+        if(isHost){
+          await completeSession();
+        }
         navigate("/results", {
           state: {
             settings: effectiveSettings,
@@ -229,7 +239,7 @@ function LiveInterviewRoom({ settings, questions }) {
       socket.off("answer-evaluated");
       socket.off("interview-finished");
     };
-  }, [socket, isHost, navigate, effectiveSettings]);
+  }, [socket, isHost, navigate, effectiveSettings, completeSession]);
 
   useEffect(() => {
     if (!isHost || !roomId || participantJoinedSignal === 0) return;
@@ -490,7 +500,8 @@ function LiveInterviewRoom({ settings, questions }) {
 
     const result = await evaluateAnswer({
       questionIndex: qIndex,
-      questionText: activeQuestions[qIndex],
+      questionId: currentQuestionId,
+      questionText: currentQuestionText,
       transcript: fullTranscript,
       mockEvaluate,
     });
@@ -519,8 +530,7 @@ function LiveInterviewRoom({ settings, questions }) {
     goToQuestion(qIndex - 1);
   };
 
-  const finishAsInterviewer = async () => {
-    await completeSession();
+  const finishAsInterviewer = () => {
     const sortedAnswers = [...answers].sort((a, b) => a.index - b.index);
     if (roomId) {
       socket.emit("interview-finished", {
@@ -705,7 +715,7 @@ function LiveInterviewRoom({ settings, questions }) {
                   number={qIndex + 1}
                   total={activeQuestions.length}
                   type={effectiveSettings.type}
-                  question={activeQuestions[qIndex]}
+                  question={currentQuestionText}
                   prompter={isFriendMode}
                 />
 

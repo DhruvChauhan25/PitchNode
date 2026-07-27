@@ -36,6 +36,11 @@ export const startQuestionsApi = (sessionId) =>
 export const nextQuestionApi = (sessionId) =>
   authedClient.get(`/questions/${sessionId}/next`);
 
+//fetch every question queued for the session at once, with real ids, which manage their
+//own local index, instead of the sequential next/mark-answered flow ussers
+export const getAllQuestionsApi = (sessionId) =>
+  authedClient.get(`/questions/${sessionId}/all`);
+
 export const markAnsweredApi = (sessionId, questionId) =>
   authedClient.post(`/questions/${sessionId}/answered/${questionId}`);
 
