@@ -227,6 +227,17 @@ Candidate's transcribed answer:
     if not buckets["confidence"] and all_scores:
         buckets["confidence"].append(round(sum(all_scores) / len(all_scores), 1))
 
+    if not buckets["problemSolving"]:
+        source = []
+
+        source.extend(buckets["technicalAccuracy"])
+        source.extend(buckets["communication"])
+
+        if source:
+            buckets["problemSolving"].append(
+                round(sum(source) / len(source), 1)
+            )
+
     final_scores = {
         k: round(sum(v) / len(v), 1) if v else 0.0
         for k, v in buckets.items()
