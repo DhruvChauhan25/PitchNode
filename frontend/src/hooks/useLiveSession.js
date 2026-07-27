@@ -5,7 +5,8 @@ import {
     startQuestionsApi, 
     startSessionApi,
     evaluateAnswerApi,
-    completeSessionApi
+    completeSessionApi,
+    getAllQuestionsApi
 } from "../api/interviewApi";
 
 export default function useLiveSession({settings, isHost, enabled = true, sessionIdOverride = null}) {
@@ -44,6 +45,8 @@ export default function useLiveSession({settings, isHost, enabled = true, sessio
                 const id = res?.data?.id;
                 if (!id) throw new Error("Session response missing id");
 
+                let tailoredTexts = null;
+
                 //tailored question when cv/jd is present
                 if(settings.cvId || settings.jobDescriptionId){
                     try{
@@ -67,6 +70,17 @@ export default function useLiveSession({settings, isHost, enabled = true, sessio
 
                 try{
                     await startQuestionsApi(id);
+                    const allRes = await getAllQuestionsApi(id);
+                    const seeded = Array.isArray(allRes?.data) ? allRes.data : [];
+
+                    if(seeded.length){
+                        setServerQuestions(
+                            seeded.map((sq, i) => ({
+                                id: sq.id,
+                                prompt: (tailoredTexts && tailoredTexts[i]) || sq.prompt,
+                            }))
+                        )
+                    }
                 } catch (err) {
                     console.warn("Question seeding failed for live room.", err);
                 }
@@ -83,11 +97,16 @@ export default function useLiveSession({settings, isHost, enabled = true, sessio
         async({questionIndex, questionText, transcript, mockEvaluate}) => {
            setScoring(true);
            let result;
-           try{
+
+            // Real question UUID when available, old synthetic placeholder only
+            // when there's genuinely no backend question row at all
+            const idForBackend = questionId || `q${questionIndex + 1}`;
+
+            try{
             if(apiMode && transcript?.trim()) {
                 const res = await evaluateAnswerApi({
                     sessionId,
-                    questionId: `q${questionIndex + 1}`,
+                    questionId: idForBackend,
                     questionText,
                     transcript,
                 });
@@ -124,12 +143,13 @@ export default function useLiveSession({settings, isHost, enabled = true, sessio
                     {
                         index: questionIndex,
                         question: questionIndex,
+                        questionId: idForBackend,
                         transcript,
                         ...result,
                     },
                 ]);
                 if(apiMode){
-                    markAnsweredApi(sessionId, `q${questionIndex + 1}`).catch(() => {});
+                    markAnsweredApi(sessionId, idForBackend).catch(() => {});
                 }
             }
             return result;
@@ -149,8 +169,11 @@ export default function useLiveSession({settings, isHost, enabled = true, sessio
             const res = await completeSessionApi(sessionId);
             return res?.data ?? null;
         } catch {
-            return null;
-        }
+            console.error(
+                "completeSession failed:",
+                err?.response?.data ?? err
+            );
+            return null;        }
     }, [apiMode, sessionId])
 
     return{
