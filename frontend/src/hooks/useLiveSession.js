@@ -74,6 +74,12 @@ export default function useLiveSession({settings, isHost, enabled = true, sessio
                     const seeded = Array.isArray(allRes?.data) ? allRes.data : [];
 
                     if(seeded.length){
+                        if (tailoredTexts && tailoredTexts.length !== seeded.length) {
+                            console.warn(
+                                `Generated question count (${tailoredTexts.length}) differs from seeded question count (${seeded.length}) — some questions may show mismatched or fallback text.`
+                            );
+                        }
+                        
                         setServerQuestions(
                             seeded.map((sq, i) => ({
                                 id: sq.id,
