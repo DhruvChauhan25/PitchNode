@@ -53,6 +53,11 @@ const setupSockets = (io) => {
             });
         });
 
+        // Candidate-transcript
+        socket.on("candidate-transcript", ({roomId, transcript}) => {
+            socket.to(roomId).emit("candidate-transcript", { transcript });
+        })
+
         socket.on("join-session", (roomId) => {
 
             // console.log(`Socket ${socket.id} is trying to join room: ${roomId}`);
@@ -106,7 +111,7 @@ const setupSockets = (io) => {
         });
 
         socket.on("disconnect", () => {
-            console.log('A user disconnected:', socket.id);
+            // console.log('A user disconnected:', socket.id);
             // Remove the user from all rooms they were in
             for (const [roomId, participants] of Object.entries(rooms)) {
             rooms[roomId] = participants.filter((id) => id !== socket.id);
