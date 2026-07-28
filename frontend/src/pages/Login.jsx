@@ -3,7 +3,7 @@ import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import Logo from "../components/Logo";
 import { useAuth } from "../context/AuthContext";
 import { homeForRole } from "../utils/roleRoutes";
-import { isMockAuth } from "../api/authApi";
+import { isMockAuth, ROLES } from "../api/authApi";
 
 function Login() {
   const navigate = useNavigate();
@@ -20,7 +20,7 @@ function Login() {
   }, []);
 
   if (isAuthenticated) {
-    const to = location.state?.from ?? homeForRole(user.role);
+    const to = location.state?.from ?? (user.role === ROLES.USER ? "/" : homeForRole(user.role));
     return <Navigate to={to} replace />;
   }
 
