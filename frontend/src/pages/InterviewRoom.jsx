@@ -88,6 +88,10 @@ function LiveInterviewRoom({ settings, questions }) {
   const [remoteSettings, setRemoteSettings] = useState(null);
   const [remoteQuestions, setRemoteQuestions] = useState(null);
   const [remoteSessionId, setRemoteSessionId] = useState(null);
+
+  //capturing the candidate's transcript
+  const [remoteCandidateTranscript, setRemoteCandidateTranscript] = useState("");
+
   const effectiveSettings =
     !isHost && remoteSettings ? remoteSettings : settings;
 
@@ -147,6 +151,12 @@ function LiveInterviewRoom({ settings, questions }) {
     reset: resetTranscript,
   } = useSpeechRecognition({ enabled: joined && micOn });
 
+  //evaluating candidate's transcript
+  const candidateAnswerTranscript = isHost
+    ? [transcript, interim].filter(Boolean).join(" ").trim()
+    : remoteCandidateTranscript
+
+
   const socketRef = useRef(null);
   if (!socketRef.current) {
     socketRef.current = io(BASE);
@@ -185,6 +195,8 @@ function LiveInterviewRoom({ settings, questions }) {
       if (typeof questionIndex === "number") {
         setQIndex(questionIndex);
       }
+      resetTranscript();
+      setRemoteCandidateTranscript("");
     });
 
     //host broadcast its real settings + question list
@@ -213,6 +225,13 @@ function LiveInterviewRoom({ settings, questions }) {
       setDisplayIsMock(Boolean(result.isMock));
     });
 
+    //candidate's live transcript relayed
+    socket.off("candidate-transcript");
+    socket.on("candidate-transcript", ({ transcript: relayedTranscript }) => {
+      if (isHost) return;
+      setRemoteCandidateTranscript(relayedTranscript ?? "");
+    });
+
     socket.off("interview-finished");
     socket.on(
       "interview-finished",
@@ -237,9 +256,10 @@ function LiveInterviewRoom({ settings, questions }) {
       socket.off("question-changed");
       socket.off("session-info");
       socket.off("answer-evaluated");
+      socket.off("candidate-transcript");
       socket.off("interview-finished");
     };
-  }, [socket, isHost, navigate, effectiveSettings, completeSession]);
+  }, [socket, isHost, navigate, effectiveSettings, completeSession, resetTranscript]);
 
   useEffect(() => {
     if (!isHost || !roomId || participantJoinedSignal === 0) return;
@@ -259,6 +279,14 @@ function LiveInterviewRoom({ settings, questions }) {
     settings,
     sessionId,
   ]);
+
+  useEffect(() => {
+    if (!isHost || !roomId) return;
+    socket.emit("candidate-transcript", {
+      roomId,
+      transcript: candidateAnswerTranscript,
+    });
+  }, [isHost, roomId, candidateAnswerTranscript, socket]);
 
   useEffect(() => {
     if (!isHost || participantJoinedSignal === 0 || !localStream) return;
@@ -493,16 +521,13 @@ function LiveInterviewRoom({ settings, questions }) {
   };
 
   const nextQuestion = async () => {
-    const fullTranscript = [transcript, interim]
-      .filter(Boolean)
-      .join(" ")
-      .trim();
 
+    //sending candidate transcript now
     const result = await evaluateAnswer({
       questionIndex: qIndex,
       questionId: currentQuestionId,
       questionText: currentQuestionText,
-      transcript: fullTranscript,
+      transcript: candidateAnswerTranscript,
       mockEvaluate,
     });
 
@@ -740,23 +765,32 @@ function LiveInterviewRoom({ settings, questions }) {
                 </div>
 
                 <TranscriptPanel
+                  lines={remoteCandidateTranscript ? [remoteCandidateTranscript] : []}
+                  interim=""
+                  supported={supported}
+                  error=""
+                />
+              </>
+            ) : (
+              <>
+                <div className="rm-card rm-anim">
+                  <div className="rm-card__head">
+                    <h3 className="rm-card__title">Your interview</h3>
+                    <span className="rm-chip">{effectiveSettings.type}</span>
+                  </div>
+                  <p className="rm-card__note">
+                    Listen to your interviewer and answer out loud. Your feedback
+                    appears below as the interview moves along.
+                  </p>
+                </div>
+
+                <TranscriptPanel
                   lines={lines}
                   interim={interim}
                   supported={supported}
                   error={speechError}
                 />
               </>
-            ) : (
-              <div className="rm-card rm-anim">
-                <div className="rm-card__head">
-                  <h3 className="rm-card__title">Your interview</h3>
-                  <span className="rm-chip">{effectiveSettings.type}</span>
-                </div>
-                <p className="rm-card__note">
-                  Listen to your interviewer and answer out loud. Your feedback
-                  appears below as the interview moves along.
-                </p>
-              </div>
             )}
 
             <FeedbackPanel
