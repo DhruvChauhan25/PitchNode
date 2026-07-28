@@ -1,10 +1,18 @@
+## PitchNode
+
+An AI-powered mock interview platform. Practice interviews three ways: 
+solo with an AI interviewer, 
+live with a human expert, 
+or live with a friend acting as prompter — all scored against a rubric.
+
+
 ## Project Structure
 
 ```text
 PitchNode/
-├── frontend/
-├── session-service/
-├── evaluation-service/
+├── frontend/                   React + Vite (Vercel)
+├── session-service/            Node + Express + Socket.IO — WebRTC signaling, live rooms (Render)
+├── evaluation-service/         Python + FastAPI — auth, sessions, questions, Groq-based evaluation (Render)
 └── README.md
 ```
 
@@ -13,7 +21,7 @@ PitchNode/
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/DhruvChauhan25/PitchNode.git
+git clone https://github.com/PitchNode-Team/PitchNode.git
 cd PitchNode
 ```
 
@@ -35,12 +43,13 @@ npm install
 
 ```bash
 cd evaluation-service
-npm install
+python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
 ## Running the Application
 
-### Start Session Service
+### Start Session Service (Node/Socket.IO)
 
 ```bash
 cd session-service
@@ -53,17 +62,17 @@ Runs on:
 http://localhost:5001
 ```
 
-### Start Evaluation Service
+### Start Evaluation Service  (FastAPI, Python)
 
 ```bash
 cd evaluation-service
-node server.js
+uvicorn app.main:app --reload --port 8000
 ```
 
 Runs on:
 
 ```text
-http://localhost:5002
+http://localhost:8000
 ```
 
 ### Start Frontend
@@ -83,18 +92,23 @@ http://localhost:5173
 
 ### Completed
 
-* React frontend setup
-* Session service setup
-* Evaluation service setup
-* Socket.IO integration
-* Real-time room joining
-* Participant count tracking
-* Webcam preview
+* Auth (register/login/JWT), role-based routing (user / expert / admin)
+* Room 1 — AI interviewer: tailored question generation from CV/JD/Duration/Difficulty, live speech-to-text, Groq-based rubric scoring, results dashboard
+* Room 2 — live interview with a human expert: request/accept flow, WebRTC video, real-time question sync
+* Room 3 — live interview with a friend as prompter: same WebRTC/Socket.IO session as Room 2, peer drives navigation, candidate is evaluated
+* Real-time signaling over Socket.IO (WebRTC offer/answer/ICE, question sync, live transcript relay, session completion handoff)
+* CV/JD upload and reuse (saved documents, system JD presets)
+* Session history with per-session results
+* Deployed: frontend on Vercel, both backend services on Render
 
-### Upcoming Features
+### Known Limitations
+* AI-generated interview questions are generated on demand and are not permanently stored for reuse.
+* The Human Expert interview workflow currently allows candidates to submit interview requests, but the expert-side acceptance, rejection, and scheduling workflow is not yet available.
+* The Admin dashboard is partially implemented and currently provides limited management functionality.
 
-* Room creation API
-* Room validation
-* WebRTC video communication
-* AI interview evaluation
-* Docker Compose deployment
+
+### Possible future work
+
+* Persist dynamically generated interview questions for analytics and replay.
+* Add calendar integration and automated interview scheduling.
+* Expand the expert dashboard with review, moderation, and analytics tools.

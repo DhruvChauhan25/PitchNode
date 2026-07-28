@@ -30,48 +30,7 @@ function metricAverages(answers) {
   );
 }
 
-function Results() {
-  const { state } = useLocation();
-  const navigate = useNavigate();
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    document.title = "Interview results — PitchNode";
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      if (state?.sessionId && state.sessionId !== "OFFLINE") {
-        try {
-          const res = await getResultsApi(state.sessionId);
-          if (!cancelled) {
-            setData(res.data);
-            setLoading(false);
-          }
-        } catch (err) {
-          console.error("Failed to fetch results", err);
-          setLoading(false);
-        }
-      }
-    })();
-    if (!state?.answers?.length) {
-      if (!cancelled) { 
-        setData(state?.answers); 
-        setLoading(false); 
-      } else { 
-        navigate("/setup", { replace: true }); 
-      }
-    }
-  }, [state, navigate]);
-
-  if(loading) return null;
-  if(!data) return null;
-
-  if (!state?.answers?.length) return null;
-
+function buildViewFromState(state){
   const { answers, settings, totalSeconds = 0 } = state;
   const averages = metricAverages(answers);
   const ranked = Object.entries(averages).sort((a, b) => b[1] - a[1]);
@@ -80,8 +39,142 @@ function Results() {
   );
   const strengths = ranked.slice(0, 2).map(([k]) => METRIC_LABELS[k]);
   const weakestKey = ranked[ranked.length - 1][0];
-  const weaknesses = [METRIC_LABELS[weakestKey]];
   const minutes = Math.max(1, Math.round(totalSeconds / 60));
+
+  return {
+    typeLine: `${settings.type} · ${settings.difficulty}`,
+    subtitle: `${answers.length} question${answers.length === 1 ? "" : "s"} answered in ${minutes} min`,
+    overall,
+    strengths,
+    weaknesses: [METRIC_LABELS[weakestKey]],
+    recommendation: RECOMMENDATIONS[weakestKey],
+    perQuestion: answers.map((a) => ({
+      key: a.index,
+      number: a.index + 1,
+      question: a.question,
+      scores: a.scores,
+      feedback: a.feedback,
+    })),
+  };
+}
+
+function buildViewFromApi (data){
+  const perQuestion = data.per_question || [];
+  const strengthKeys = data.strengths || [];
+  const weaknessKeys = data.weaknesses || [];
+  const weakestKey = weaknessKeys[0];
+
+  return {
+    typeLine: [data.interview_type, data.difficulty].filter(Boolean).join(" · "),
+    subtitle: `${perQuestion.length} question${perQuestion.length === 1 ? "" : "s"} answered`,
+    overall: Math.round(data.overall_score ?? 0),
+    strengths: strengthKeys.map((k) => METRIC_LABELS[k]).filter(Boolean),
+    weaknesses: weaknessKeys.map((k) => METRIC_LABELS[k]).filter(Boolean),
+    recommendation:
+      data.recommendation ||
+      (weakestKey && RECOMMENDATIONS[weakestKey]) ||
+        "Keep practicing across all dimensions.",
+        perQuestion: perQuestion.map((q, i) => ({
+          key: q.question_id || i,
+          number: i + 1,
+          question: q.question_text || "Question",
+          scores: q.scores || {},
+          feedback: q.feedback || "",
+          })
+      ),
+  };
+
+}
+
+function Results() {
+  const { state } = useLocation();
+  const navigate = useNavigate();
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState("");
+
+  useEffect(() => {
+    document.title = "Interview results — PitchNode";
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (state?.answers?.length) {
+      setLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const sessionId = state?.sessionId;
+    if (!sessionId || sessionId === "OFFLINE") {
+      setLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    (async () => {
+      try {
+        const res = await getResultsApi(state.sessionId);
+        if (!cancelled) {
+          setData(res.data);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("Failed to fetch results", err);
+        if (!cancelled) {
+          setFetchError("Couldn't load your results. Try again in a moment.");
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [state]);
+
+  const view = state?.answers?.length
+    ? buildViewFromState(state)
+    : data
+    ? buildViewFromApi(data)
+    : null;
+    
+
+  if (loading) {
+    return (
+      <>
+        <nav className="pn-nav">
+          <Logo />
+        </nav>
+        <main className="dash-main">
+          <p className="dash-label">Loading your results…</p>
+        </main>
+      </>
+    );
+  }
+
+  if (!view) {
+    return (
+      <>
+        <nav className="pn-nav">
+          <Logo />
+        </nav>
+        <main className="dash-main">
+          <p className="dash-label">
+            {fetchError || "No results to show yet."}
+          </p>
+          <button className="pn-btn pn-btn--ghost" onClick={() => navigate("/history")}>
+            View all sessions
+          </button>
+        </main>
+      </>
+    );
+  }
+
+  const { typeLine, subtitle, overall, strengths, weaknesses, recommendation, perQuestion } = view; 
 
   return (
     <>
@@ -97,8 +190,9 @@ function Results() {
         <header className="dash-head">
           <h1>Your results</h1>
           <p>
-            {settings.type} · {settings.difficulty} · {answers.length}{" "}
-            question{answers.length === 1 ? "" : "s"} answered in {minutes} min
+            {typeLine}
+            {typeLine && subtitle ? " · " : ""}
+            {subtitle}
           </p>
         </header>
 
@@ -137,16 +231,16 @@ function Results() {
 
           <div className="pn-card dash-card">
             <p className="dash-label">Recommendation</p>
-            <p className="dash-reco">{RECOMMENDATIONS[weakestKey]}</p>
+            <p className="dash-reco">{recommendation}</p>
           </div>
         </section>
 
         <section className="dash-questions">
           <h2>Question breakdown</h2>
-          {answers.map((a) => (
-            <div key={a.index} className="pn-card dash-card dash-q">
+          {perQuestion.map((a) => (
+            <div key={a.key} className="pn-card dash-card dash-q">
               <p className="dash-q__text">
-                <span className="dash-q__num">Q{a.index + 1}</span>
+                <span className="dash-q__num">Q{a.number}</span>
                 {a.question}
               </p>
               <div className="dash-q__metrics">

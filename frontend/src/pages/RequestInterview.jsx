@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Logo from "../components/Logo";
-import useJobDescriptions from '../hooks/useJobDescription' 
+import useJobDescriptions from '../hooks/useJobDescription';
+import useUserDocuments from "../hooks/useUserDocuments.js";
 import { uploadCvApi } from "../api/documentsApi";
 import { createRequestApi } from "../api/requestApi";
+
+const NEW_CV_OPTION = "--upload_new__";
 
 function RequestInterview() {
     const navigate = useNavigate();
@@ -13,9 +16,12 @@ function RequestInterview() {
     const [jobTitle, setJobTitle] = useState("");
     const [jdId, setJdId] = useState(prefill.jobDescriptionId || "");
     const [jdText, setJdText] = useState(prefill.jobDescriptionText || "");
+
+    const [cvChoice, setCvChoice] = useState(prefill.cvId || "");
     const [cvFileName, setCvFileName] = useState(prefill.cvFileName || "");
     const [cvId, setCvId] = useState(prefill.cvId || null);    
-    const [uploadingCv, setUploadingCv] = useState(false);
+    const [pendingCvFile, setPendingCvFile] = useState(null);
+
     const [preferredTime, setPreferredTime] = useState("");
     const [duration] = useState(prefill.duration || null);
     const [error, setError] = useState("");
@@ -27,31 +33,50 @@ function RequestInterview() {
     }, []);
 
     const { jobDescriptions } = useJobDescriptions();
-    const selectedJd = jobDescriptions.find((j) => j.id === jdId);
+    const { cvs: savedCvs, jds: savedJds, loading: docsLoading } = useUserDocuments();
+
+    const allJds = [...savedJds, ...jobDescriptions];
+    
+    const selectedJd = allJds.find((j) => j.id === jdId);
     const carried = prefill.cvFileName || prefill.jobDescriptionId || prefill.jobDescriptionText;
 
-    const onCv = async (e) => {
+    const onCvPicked = (e) => {
         const file = e.target.files?.[0];
         if (!file) 
             return;
 
+        setPendingCvFile(file);
         setCvFileName(file.name);
-        setUploadingCv(true);
-        try {
-            const res = await uploadCvApi(file);
-            setCvId(res?.id || null);
-        } catch {
+        setCvId(null);
+        setError("");
+    }
+
+    const onCvChoiceChange = (value) => {
+        setCvChoice(value);
+
+        if (value === NEW_CV_OPTION) {
             setCvId(null);
-            setError("Error uploading CV");
-        } finally {
-            setUploadingCv(false);
+            setPendingCvFile(null);
+            setCvFileName("");
+            fileRef.current && (fileRef.current.value = "");
+            fileRef.current?.click();
+        } else if (value === "") {
+            setCvId(null);
+            setPendingCvFile(null);
+            setCvFileName("");
+        } else {
+            // an existing CV was picked — its id is already real, no upload needed
+            const chosen = savedCvs.find((c) => c.id === value);
+            setCvId(value);
+            setPendingCvFile(null);
+            setCvFileName(chosen?.file_name || "");
         }
     };
 
     const submit = async (e) => {
         e.preventDefault();
         setError("");
-        if (!jobTitle.trim()) {
+        if(!jobTitle.trim()){
             setError("Please enter the job title you're interviewing for.");
             return;
         }
@@ -64,12 +89,25 @@ function RequestInterview() {
         setBusy(true);
 
         try{
+            let resolvedCvId = cvId;
+            if (pendingCvFile && !resolvedCvId) {
+                try {
+                    const res = await uploadCvApi(pendingCvFile);
+                    resolvedCvId = res?.id || null;
+                    setCvId(resolvedCvId);
+                } catch {
+                    setError("Couldn't upload your CV. You can remove it and continue without one, or try again.");
+                    setBusy(false);
+                    return;
+                }
+            }
+            
             await createRequestApi({
                 job_title: jobTitle.trim(),
                 jd_id: jdId || null,
                 job_description: jdText.trim() || null,
                 duration: duration || null,
-                cv_id: cvId || null,
+                cv_id: resolvedCvId || null,
                 cv_file_name: cvFileName || null,
                 preferred_time: preferredTime? new Date(preferredTime).toISOString(): null,
             });
@@ -117,6 +155,70 @@ function RequestInterview() {
             </section>
 
             <section className="setup-docs">
+                <p className="setup-group__label">
+                    Tailor your questions <span className="setup-optional">optional</span>
+                </p>
+
+                <div className="setup-upload">
+                    <input
+                        ref={fileRef}
+                        type="file"
+                        accept="application/pdf"
+                        onChange={onCvPicked}
+                        hidden
+                    />
+
+                    {savedCvs.length > 0 ? (
+                        <select
+                            className="pn-input"
+                            value={cvChoice}
+                            onChange={(e) => onCvChoiceChange(e.target.value)}
+                            disabled={docsLoading}
+                        >
+                            <option value="">No CV — skip tailoring</option>
+                            {savedCvs.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                    {c.file_name}
+                                </option>
+                            ))}
+                            <option value={NEW_CV_OPTION}>Upload a new CV…</option>
+                        </select>
+                    ) : (
+                        <button
+                            className="pn-btn pn-btn--ghost"
+                            onClick={() => fileRef.current?.click()}
+                        >
+                            {cvFileName ? "Replace CV" : "Upload CV (PDF)"}
+                        </button>
+                    )}
+
+                    {cvFileName ? (
+                        <span className="setup-upload__file">
+                            {cvFileName}
+                            {pendingCvFile && <span className="setup-upload__pending"> (will upload on submit)</span>}
+                            <button
+                                className="setup-upload__clear"
+                                onClick={() => {
+                                    setCvId(null);
+                                    setPendingCvFile(null);
+                                    setCvFileName("");
+                                    setCvChoice("");
+                                    if (fileRef.current) fileRef.current.value = "";
+                                }}
+                                aria-label="Remove CV"
+                            >
+                                ✕
+                            </button>
+                        </span>
+                    ) : (
+                        <span className="setup-upload__hint">
+                            Helps the expert tailor the interview to your experience.
+                        </span>
+                    )}
+                </div>
+            </section>
+
+            <section className="setup-docs">
                 <p className="setup-group__label">Job description *</p>
 
                 <div className="setup-jd">
@@ -129,11 +231,24 @@ function RequestInterview() {
                         }}
                         >
                         <option value="">Choose from our library…</option>
-                        {jobDescriptions.map((jd) => (
-                            <option key={jd.id} value={jd.id}>
-                            {jd.title} — {jd.company}
-                            </option>
-                        ))}
+
+                        {savedJds.length > 0 && (
+                            <optgroup label="Your saved job descriptions">
+                                {savedJds.map((jd) => (
+                                    <option key={jd.id} value={jd.id}>
+                                        {jd.title} — {jd.company}
+                                    </option>
+                                ))}
+                            </optgroup>
+                        )}
+
+                        <optgroup label="Library">
+                            {jobDescriptions.map((jd) => (
+                                <option key={jd.id} value={jd.id}>
+                                {jd.title} — {jd.company}
+                                </option>
+                            ))}
+                        </optgroup>
                     </select>
 
                     {selectedJd && (
@@ -151,43 +266,6 @@ function RequestInterview() {
                         />
                     </> )} 
 
-                </div>
-            </section>
-
-            <section className="setup-docs">
-                <p className="setup-group__label">
-                    Resume / CV <span className="setup-optional">optional</span>
-                </p>
-                <div className="setup-upload">
-                    <input
-                        ref={fileRef}
-                        type="file"
-                        accept="application/pdf"
-                        onChange={onCv}
-                        hidden
-                    />
-                    <button
-                        className="pn-btn pn-btn--ghost"
-                        onClick={() => fileRef.current?.click()}
-                    >
-                        {uploadingCv ? "Uploading…" : cvFileName ? "Replace CV" : "Upload CV (PDF)"}
-                    </button>
-                    {cvFileName ? (
-                        <span className="setup-upload__file">
-                            {cvFileName}
-                            <button
-                                className="setup-upload__clear"
-                                onClick={() => setCvFileName("")}
-                                aria-label="Remove CV"
-                            >
-                                ✕
-                            </button>
-                        </span>
-                    ) : (
-                    <span className="setup-upload__hint">
-                        Helps the expert tailor the interview to your experience.
-                    </span>
-                    )}
                 </div>
             </section>
 
@@ -233,17 +311,17 @@ function RequestInterview() {
 
                 <div className="setup-footer__actions">
                     <button
-                    className="pn-btn pn-btn--ghost"
-                    onClick={() => navigate("/setup")}
+                        className="pn-btn pn-btn--ghost"
+                        onClick={() => navigate("/setup")}
                     >
-                    Back
+                        Back
                     </button>
                     <button
-                    className="pn-btn pn-btn--primary"
-                    onClick={submit}
-                    disabled={busy}
+                        className="pn-btn pn-btn--primary"
+                        onClick={submit}
+                        disabled={busy}
                     >
-                    {busy ? "Submitting…" : "Submit request"}
+                        {busy ? "Submitting…" : "Submit request"}
                     </button>
                 </div>
             </footer>         
