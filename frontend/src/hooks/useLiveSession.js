@@ -59,9 +59,7 @@ export default function useLiveSession({settings, isHost, enabled = true, sessio
                         })
 
                         if(Array.isArray(gen?.data) && gen.data.length) {
-                            setServerQuestions(
-                                gen.data.map((q) => q.prompt ?? q.text ?? "").filter(Boolean)
-                            );
+                            tailoredTexts = gen.data.map((q) => q.prompt ?? q.text ?? "");
                         }
                     } catch (err) {
                         console.warn("Tailored generation unavailable for live room.", err);
@@ -100,7 +98,7 @@ export default function useLiveSession({settings, isHost, enabled = true, sessio
     }, [enabled, isHost, settings])
 
     const evaluateAnswer = useCallback(
-        async({questionIndex, questionText, transcript, mockEvaluate}) => {
+        async({questionIndex, questionId, questionText, transcript, mockEvaluate}) => {
            setScoring(true);
            let result;
 
@@ -174,7 +172,7 @@ export default function useLiveSession({settings, isHost, enabled = true, sessio
         try{
             const res = await completeSessionApi(sessionId);
             return res?.data ?? null;
-        } catch {
+        } catch (err){
             console.error(
                 "completeSession failed:",
                 err?.response?.data ?? err
